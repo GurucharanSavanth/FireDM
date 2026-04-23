@@ -1,4 +1,6 @@
 [repro] single-video url: https://www.youtube.com/watch?v=jNQXAC9IVRw
 [stage extractor_ready] passed=True detail=active=yt_dlp, preferred=yt_dlp
 [stage default_is_primary] passed=True
-[stage create_video_playlist] passed=False returned 0 items
+[stage create_video_playlist] passed=True returned 1 items
+[stage stream_menu] passed=True 16 streams, title='Me at the zoo'
+[stage selected_stream_url] passed=True selected=    mp4 - 240p - 320x240 - 218.53 KB - id:395 - 15 fps, has_url=True

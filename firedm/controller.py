@@ -33,6 +33,8 @@ from .utils import *
 from . import setting
 from . import config
 from .config import Status, MediaType
+from .ffmpeg_service import locate_ffmpeg
+from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
 from .brain import brain
 from . import video
 from .video import get_media_info, process_video
@@ -61,59 +63,36 @@ def check_ffmpeg():
     and finally: system wide"""
 
     log('check ffmpeg availability?', log_level=2)
-    found = False
-    fn = 'ffmpeg.exe' if config.operating_system == 'Windows' else 'ffmpeg'
+    ffmpeg_info = locate_ffmpeg(
+        saved_path=config.ffmpeg_actual_path,
+        search_dirs=(config.current_directory, config.global_sett_folder),
+        operating_system=config.operating_system,
+    )
 
-    # check in predefined path
-    if os.path.isfile(config.ffmpeg_actual_path):
-        found = True
+    if ffmpeg_info.found:
+        config.ffmpeg_actual_path = ffmpeg_info.path
+        config.ffmpeg_version = ffmpeg_info.version
 
-    # search in current app directory then default setting folder
-    if not found:
-        try:
-            # if config.operating_system == 'Windows':
-            for folder in [config.current_directory, config.global_sett_folder]:
-                for file in os.listdir(folder):
-                    # print(file)
-                    if file == fn:
-                        found = True
-                        config.ffmpeg_actual_path = os.path.join(folder, file)
-                        break
-                if found:  # break outer loop
-                    break
-        except:
-            pass
-
-    # Search in the system
-    if not found:
-        cmd = 'where ffmpeg' if config.operating_system == 'Windows' else 'which ffmpeg'
-        error, output = run_command(cmd, verbose=False)
-        if not error:
-            found = True
-
-            # fix issue 47 where command line return \n\r with path
-            output = output.strip()
-            config.ffmpeg_actual_path = os.path.realpath(output)
-
-    if found:
         msg = f'ffmpeg checked ok! - at: {config.ffmpeg_actual_path}'
-
-        # get version
-        cmd = f'"{config.ffmpeg_actual_path}" -version'
-        error, out = run_command(cmd, verbose=False, striplines=False)
-        if not error:
-            try:
-                # ffmpeg version 4.3.2-0+deb11u1ubuntu1 Copyright (c) 2000-2021 the FFmpeg developers
-                match = re.match(r'ffmpeg version (.*?) Copyright', out, re.IGNORECASE)
-                config.ffmpeg_version = match.groups()[0]
-                msg += f', version: {config.ffmpeg_version}'
-            except:
-                pass
+        if config.ffmpeg_version:
+            msg += f', version: {config.ffmpeg_version}'
         log(msg, log_level=2)
+        pipeline_event(
+            PipelineStage.FFMPEG_DISCOVER,
+            "ok",
+            path=config.ffmpeg_actual_path,
+            version=config.ffmpeg_version,
+        )
         return True
-    else:
-        log(f'can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
-            config.global_sett_folder, 'or', config.current_directory)
+
+    log(f'can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
+        config.global_sett_folder, 'or', config.current_directory)
+    pipeline_event(
+        PipelineStage.FFMPEG_DISCOVER,
+        "fail",
+        detail="ffmpeg not located in saved path, current dir, global settings, or PATH",
+        searched=[config.current_directory, config.global_sett_folder],
+    )
 
 
 def write_timestamp(d):
@@ -221,12 +200,19 @@ def create_video_playlist(url, ytdloptions=None, interrupt=False):
     """Process url and build video object(s) and return a video playlist"""
 
     log('creating video playlist', log_level=2)
+    pipeline_event(PipelineStage.PLAYLIST_PARSE, "start", url=url)
     playlist = []
 
     info = get_media_info(url, ytdloptions=ytdloptions, interrupt=interrupt)
 
     if not info:
         log('no video streams detected')
+        pipeline_event(
+            PipelineStage.PLAYLIST_PARSE,
+            "fail",
+            detail="get_media_info returned None",
+            url=url,
+        )
         return []
 
     try:
@@ -238,7 +224,6 @@ def create_video_playlist(url, ytdloptions=None, interrupt=False):
 
             # videos info
             pl_info = list(info.get('entries'))  # info.get('entries') is a generator
-            # log('list(info.get(entries):', pl_info)
 
             # create initial playlist with un-processed video objects
             for v_info in pl_info:
@@ -257,7 +242,13 @@ def create_video_playlist(url, ytdloptions=None, interrupt=False):
                 # add video to playlist
                 playlist.append(vid)
 
-                # vid.register_callback(self.observer)
+            pipeline_event(
+                PipelineStage.PLAYLIST_PARSE,
+                "ok",
+                url=url,
+                entries=len(playlist),
+                kind="playlist",
+            )
         else:
             processed_info = get_media_info(info=info, ytdloptions=ytdloptions)
 
@@ -274,12 +265,25 @@ def create_video_playlist(url, ytdloptions=None, interrupt=False):
 
                 # add video to playlist
                 playlist.append(vid)
-
-                # vid.register_callback(self.observer)
+                pipeline_event(
+                    PipelineStage.PLAYLIST_PARSE,
+                    "ok",
+                    url=url,
+                    entries=1,
+                    kind="single",
+                )
             else:
                 log('no video streams detected')
+                pipeline_event(
+                    PipelineStage.PLAYLIST_PARSE,
+                    "fail",
+                    detail="processed_info missing formats",
+                    url=url,
+                    kind="single",
+                )
     except Exception as e:
         playlist = []
+        pipeline_exception(PipelineStage.PLAYLIST_PARSE, e, url=url)
         log('controller.create_video_playlist:', e)
         if config.test_mode:
             raise e
@@ -925,9 +929,23 @@ class Controller:
             if not download_later:
                 d.status = Status.pending
                 self.download_q.put(d)
+                pipeline_event(
+                    PipelineStage.DOWNLOAD_ENQUEUE,
+                    "ok",
+                    uid=d.uid,
+                    name=d.name,
+                    type=d.type,
+                )
 
             return True
         else:
+            pipeline_event(
+                PipelineStage.DOWNLOAD_ENQUEUE,
+                "fail",
+                detail="pre_download_checks rejected",
+                name=getattr(d, "name", None),
+                type=getattr(d, "type", None),
+            )
             return False
 
     @threaded
@@ -1166,8 +1184,11 @@ class Controller:
                 msg += f'    {pkg}: up to date!\n\n'
 
         if new_pkgs:
-            msg += 'Do you want to update now? \n'
-            options = ['Update', 'Cancel']
+            action_label = 'Update' if update.self_update_supported() else 'Open release page'
+            msg += 'Do you want to continue now? \n'
+            if not update.self_update_supported():
+                msg += f'\n{update.get_update_instructions()}\n'
+            options = [action_label, 'Cancel']
 
             # show update notes for firedm
             if 'firedm' in new_pkgs:
@@ -1185,6 +1206,10 @@ class Controller:
 
             res = self.get_user_response(msg, options)
             if res == options[0]:
+                if not update.self_update_supported():
+                    update.open_update_link()
+                    log(update.get_update_instructions(), showpopup=True)
+                    return
 
                 # check write permission
                 tf = update.get_target_folder('firedm')
@@ -1852,4 +1877,3 @@ class Controller:
 
         # update view
         self.report_d(d, threaded=False)
-

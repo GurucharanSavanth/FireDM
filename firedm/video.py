@@ -19,6 +19,8 @@ import subprocess
 
 from . import config
 from .downloaditem import DownloadItem, Segment
+from .extractor_adapter import choose_extractor_name, load_extractor_module
+from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
 from .utils import (log, validate_file_name, get_headers, format_bytes, run_command, delete_file, download, rename_file,
                     run_thread, import_file)
 
@@ -200,7 +202,26 @@ class Video(DownloadItem):
             return title
 
     def _process_streams(self):
-        all_streams = [Stream(x) for x in self.vid_info['formats']]
+        raw_formats = self.vid_info.get('formats', []) or []
+        pipeline_event(
+            PipelineStage.STREAM_BUILD,
+            "start",
+            url=getattr(self, "url", ""),
+            formats=len(raw_formats),
+        )
+        all_streams = []
+        for idx, fmt in enumerate(raw_formats):
+            try:
+                all_streams.append(Stream(fmt))
+            except Exception as e:
+                pipeline_exception(
+                    PipelineStage.STREAM_BUILD,
+                    e,
+                    format_id=fmt.get('format_id') if isinstance(fmt, dict) else None,
+                    idx=idx,
+                )
+                if config.test_mode:
+                    raise
         all_streams.reverse()  # get higher quality first
 
         # streams have mediatype = (normal, dash, audio, others)
@@ -715,54 +736,105 @@ def load_extractor_engines(reload=False):
         reload (bool): if true it will reload modules instead of importing, needed after modules update
     """
 
+    def _load_user_extractors_safely(engine, engine_name):
+        try:
+            load_user_extractors(engine=engine)
+        except Exception as e:
+            pipeline_exception(
+                PipelineStage.EXTRACTOR_LOAD,
+                e,
+                engine=engine_name,
+                phase="user_extractors",
+            )
+            log(f'load_user_extractors({engine_name}) error:', e, log_level=2)
+
     # youtube-dl ----------------------------------------------------------------------------------------------------
     def import_youtube_dl():
         global youtube_dl
+        pipeline_event(PipelineStage.EXTRACTOR_LOAD, "start", engine="youtube_dl")
         start = time.time()
 
-        if reload and youtube_dl:
-            importlib.reload(youtube_dl)
-        else:
-            import youtube_dl
+        try:
+            extractor = load_extractor_module(
+                'youtube_dl',
+                reload_existing=reload,
+                existing_module=youtube_dl,
+            )
+        except Exception as e:
+            pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine="youtube_dl")
+            log('youtube_dl import failed:', e, log_level=2)
+            return
+        youtube_dl = extractor.module
 
-        config.youtube_dl_version = youtube_dl.version.__version__
+        config.youtube_dl_version = extractor.version
 
         # calculate loading time
         load_time = time.time() - start
         log(f'youtube_dl version: {config.youtube_dl_version}, load_time= {int(load_time)} seconds', log_level=2)
+        pipeline_event(
+            PipelineStage.EXTRACTOR_LOAD,
+            "ok",
+            engine="youtube_dl",
+            version=config.youtube_dl_version,
+            load_seconds=round(load_time, 2),
+        )
 
         # get a random user agent and update headers
         if not config.custom_user_agent:
-            config.http_headers['User-Agent'] = youtube_dl.utils.random_user_agent()
+            try:
+                config.http_headers['User-Agent'] = youtube_dl.utils.random_user_agent()
+            except Exception as e:
+                pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine="youtube_dl", phase="user_agent")
 
-        # set default extractor
-        if config.active_video_extractor == 'youtube_dl':
-            set_default_extractor('youtube_dl')
+        active = choose_extractor_name(
+            config.active_video_extractor,
+            [name for name, module in (('yt_dlp', yt_dlp), ('youtube_dl', youtube_dl)) if module],
+        )
+        if active:
+            set_default_extractor(active)
 
-        load_user_extractors(engine=youtube_dl)
+        _load_user_extractors_safely(youtube_dl, "youtube_dl")
 
     # yt_dlp ----------------------------------------------------------------------------------------------------
     def import_yt_dlp():
         global yt_dlp
+        pipeline_event(PipelineStage.EXTRACTOR_LOAD, "start", engine="yt_dlp")
 
         start = time.time()
 
-        if reload and yt_dlp:
-            importlib.reload(yt_dlp)
-        else:
-            import yt_dlp
+        try:
+            extractor = load_extractor_module(
+                'yt_dlp',
+                reload_existing=reload,
+                existing_module=yt_dlp,
+            )
+        except Exception as e:
+            pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine="yt_dlp")
+            log('yt_dlp import failed:', e, log_level=2)
+            return
+        yt_dlp = extractor.module
 
-        config.yt_dlp_version = yt_dlp.version.__version__
+        config.yt_dlp_version = extractor.version
 
         # calculate loading time
         load_time = time.time() - start
         log(f'yt_dlp version: {config.yt_dlp_version}, load_time= {int(load_time)} seconds', log_level=2)
+        pipeline_event(
+            PipelineStage.EXTRACTOR_LOAD,
+            "ok",
+            engine="yt_dlp",
+            version=config.yt_dlp_version,
+            load_seconds=round(load_time, 2),
+        )
 
-        # set default extractor
-        if config.active_video_extractor == 'yt_dlp':
-            set_default_extractor('yt_dlp')
+        active = choose_extractor_name(
+            config.active_video_extractor,
+            [name for name, module in (('yt_dlp', yt_dlp), ('youtube_dl', youtube_dl)) if module],
+        )
+        if active:
+            set_default_extractor(active)
 
-        load_user_extractors(engine=yt_dlp)
+        _load_user_extractors_safely(yt_dlp, "yt_dlp")
 
     run_thread(import_youtube_dl, daemon=True)
     run_thread(import_yt_dlp, daemon=True)
@@ -775,6 +847,12 @@ def set_default_extractor(extractor=None):
     global ytdl
     ytdl = youtube_dl if extractor == 'youtube_dl' else yt_dlp
     log('set default extractor engine to:', extractor, ytdl, log_level=2)
+    pipeline_event(
+        PipelineStage.EXTRACTOR_SELECT,
+        "ok" if ytdl is not None else "fail",
+        active=extractor,
+        module=getattr(ytdl, "__name__", None),
+    )
 
 
 def set_interrupt_switch(ydl):
@@ -1431,8 +1509,25 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
     # we import youtube-dl in separate thread to minimize startup time, will wait in loop until it gets imported
     if ytdl is None:
         log(f'loading {config.active_video_extractor} ...')
-        while not ytdl:
+        pipeline_event(PipelineStage.EXTRACTOR_READY, "start", configured=config.active_video_extractor)
+        waited = 0
+        while not ytdl and waited < 45:
             time.sleep(1)  # wait until module gets imported
+            waited += 1
+        if ytdl is None:
+            pipeline_event(
+                PipelineStage.EXTRACTOR_READY,
+                "fail",
+                detail="extractor did not initialize within 45s",
+                configured=config.active_video_extractor,
+            )
+            return None
+        pipeline_event(
+            PipelineStage.EXTRACTOR_READY,
+            "ok",
+            active=getattr(ytdl, "__name__", "?"),
+            waited_seconds=waited,
+        )
 
     # get global youtube_dl options
     options = get_ytdl_options()
@@ -1448,7 +1543,13 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
 
     if not info:
         # fetch info by youtube-dl
-        info = ydl.extract_info(url, download=False, process=False)
+        try:
+            info = ydl.extract_info(url, download=False, process=False)
+        except Exception as e:
+            pipeline_exception(PipelineStage.METADATA_FETCH, e, url=url, phase="initial")
+            log('video.get_media_info()> extract_info failed:', e, log_level=2)
+            return None
+
     try:
         # get media type, refer to youtube-dl/extractor/generic.py
         # possible values: playlist, multi_video, url, and url_transparent
@@ -1463,13 +1564,15 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
         # don't process direct links, refer to youtube-dl/extractor/generic.py
         if info.get('direct'):
             log('controller._create_video_playlist()> No streams found')
+            pipeline_event(PipelineStage.METADATA_FETCH, "skip", detail="direct link", url=url)
             info = None
 
         # process info, avoid playlist / multi_video -------------------------------------------------
         if _type not in ('playlist', 'multi_video') and 'entries' not in info:
             info = ydl.process_ie_result(info, download=False)
     except Exception as e:
-        log('video.get_media_info() error:', e, log_level=3)
+        pipeline_exception(PipelineStage.METADATA_FETCH, e, url=url, phase="process_ie")
+        log('video.get_media_info() error:', e, log_level=2)
 
     return info
 
@@ -1477,9 +1580,9 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
 def process_video(vid):
     """process video info and refresh Video object properties,
     typically required when video is a part of unprocessed video playlist"""
+    pipeline_event(PipelineStage.METADATA_FETCH, "start", url=getattr(vid, "url", ""))
     try:
         vid.busy = True  # busy flag will be used to show progress bar or a busy mouse cursor
-        # vid_info = self._process_video_info(vid.vid_info)
         vid_info = get_media_info(info=vid.vid_info)
 
         if vid_info:
@@ -1490,15 +1593,27 @@ def process_video(vid):
 
             log('_process_video_info()> processed url:', vid.url, log_level=3)
             vid.processed = True
+            pipeline_event(
+                PipelineStage.METADATA_FETCH,
+                "ok",
+                url=vid.url,
+                streams=len(getattr(vid, "all_streams", []) or []),
+            )
         else:
             log('_process_video()> Failed,  url:', vid.url, log_level=3)
+            pipeline_event(
+                PipelineStage.METADATA_FETCH,
+                "fail",
+                detail="get_media_info returned None",
+                url=vid.url,
+            )
     except Exception as e:
+        pipeline_exception(PipelineStage.METADATA_FETCH, e, url=getattr(vid, "url", ""))
         log('_process_video()> error:', e)
         if config.test_mode:
             raise e
     finally:
         vid.busy = False
-
 
 
 
