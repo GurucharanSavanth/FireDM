@@ -35,6 +35,7 @@ from . import config
 from .config import Status, MediaType
 from .ffmpeg_service import locate_ffmpeg
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
+from .playlist_builder import build_playlist_from_info
 from .playlist_entry import normalize_entry
 from .brain import brain
 from . import video
@@ -198,14 +199,15 @@ def log_runtime_info():
 
 
 def create_video_playlist(url, ytdloptions=None, interrupt=False):
-    """Process url and build video object(s) and return a video playlist"""
+    """Process a URL and return a list of Video-like objects.
 
+    Delegates extractor I/O to `video.get_media_info` and parsing to
+    `playlist_builder.build_playlist_from_info`. The controller stays
+    responsible for orchestration (network fetch, thumbnail) but not
+    for walking entry dicts.
+    """
     log('creating video playlist', log_level=2)
-    pipeline_event(PipelineStage.PLAYLIST_PARSE, "start", url=url)
-    playlist = []
-
     info = get_media_info(url, ytdloptions=ytdloptions, interrupt=interrupt)
-
     if not info:
         log('no video streams detected')
         pipeline_event(
@@ -216,113 +218,41 @@ def create_video_playlist(url, ytdloptions=None, interrupt=False):
         )
         return []
 
-    try:
-        _type = info.get('_type', 'video')
-
-        # check results if _type is a playlist / multi_video -------------------------------------------------
-        if _type in ('playlist', 'multi_video') or 'entries' in info:
-            log('processing playlist')
-
-            raw_entries = list(info.get('entries') or [])  # generator/list → list
-
-            skipped = 0
-            for idx, v_info in enumerate(raw_entries):
-                if not isinstance(v_info, dict):
-                    skipped += 1
-                    pipeline_event(
-                        PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
-                        "fail",
-                        detail="entry is not a dict",
-                        idx=idx,
-                    )
-                    continue
-
-                v_info.setdefault('formats', [])
-
-                normalized = normalize_entry(v_info)
-                if normalized is None:
-                    skipped += 1
-                    pipeline_event(
-                        PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
-                        "fail",
-                        detail="no identifier or url",
-                        idx=idx,
-                    )
-                    continue
-
-                pipeline_event(
-                    PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
-                    "ok",
-                    idx=idx,
-                    source=normalized.source_field,
-                    rebuilt=normalized.was_normalized,
-                    ie_key=normalized.ie_key,
-                )
-
-                try:
-                    vid = ObservableVideo(normalized.url, v_info)
-                except Exception as e:
-                    skipped += 1
-                    pipeline_exception(
-                        PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
-                        e,
-                        idx=idx,
-                        url=normalized.url,
-                    )
-                    continue
-
-                vid.playlist_title = info.get('title', '')
-                vid.playlist_url = url
-                playlist.append(vid)
-
+    # For single-video URLs we still re-fetch with process=True so formats
+    # are populated. Playlists stay lazy (per-entry processing happens
+    # later via `process_video`).
+    _type = info.get('_type', 'video')
+    if _type not in ('playlist', 'multi_video') and 'entries' not in info:
+        processed = get_media_info(info=info, ytdloptions=ytdloptions)
+        if processed is None or not processed.get('formats'):
+            log('no video streams detected')
             pipeline_event(
                 PipelineStage.PLAYLIST_PARSE,
-                "ok",
+                "fail",
+                detail="processed_info missing formats",
                 url=url,
-                entries=len(playlist),
-                skipped=skipped,
-                kind="playlist",
+                kind="single",
             )
-        else:
-            processed_info = get_media_info(info=info, ytdloptions=ytdloptions)
+            return []
+        info = processed
 
-            if processed_info and processed_info.get('formats'):
-
-                # create video object
-                vid = ObservableVideo(url, processed_info)
-
-                # get thumbnail
-                vid.get_thumbnail()
-
-                # report done processing
-                vid.processed = True
-
-                # add video to playlist
-                playlist.append(vid)
-                pipeline_event(
-                    PipelineStage.PLAYLIST_PARSE,
-                    "ok",
-                    url=url,
-                    entries=1,
-                    kind="single",
-                )
-            else:
-                log('no video streams detected')
-                pipeline_event(
-                    PipelineStage.PLAYLIST_PARSE,
-                    "fail",
-                    detail="processed_info missing formats",
-                    url=url,
-                    kind="single",
-                )
+    try:
+        result = build_playlist_from_info(url, info, observable_factory=ObservableVideo)
     except Exception as e:
-        playlist = []
         pipeline_exception(PipelineStage.PLAYLIST_PARSE, e, url=url)
         log('controller.create_video_playlist:', e)
         if config.test_mode:
             raise e
+        return []
 
-    return playlist
+    # side-effect only the controller owns: pull thumbnails for single-entry results
+    if result.kind == "single" and result.videos:
+        try:
+            result.videos[0].get_thumbnail()
+        except Exception as e:
+            pipeline_exception(PipelineStage.PLAYLIST_PARSE, e, url=url, phase="thumbnail")
+
+    return result.videos
 
 
 def url_to_playlist(url, ytdloptions=None):
