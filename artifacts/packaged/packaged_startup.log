@@ -1,0 +1,6 @@
+[packaged-verify] timestamp=2026-04-23T13:56:41
+[packaged-verify] --help exit=0 passed=True
+[packaged-verify] --show-settings exit=0 passed=True
+[packaged-verify] --imports-only exit=0 passed=True
+[packaged-verify] GUI alive_after_4s=True
+[packaged-verify] overall_passed=True

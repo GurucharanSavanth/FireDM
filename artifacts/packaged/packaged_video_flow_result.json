@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-04-23T13:56:41",
+  "checks": {
+    "help": {
+      "exit_code": 0,
+      "stdout_head": [
+        "",
+        ">> setting.cfg not found",
+        "usage: ",
+        "firedm [OPTIONS] URL1 URL2 URL3 "
+      ],
+      "passed": true
+    },
+    "show_settings": {
+      "exit_code": 0,
+      "stdout_head": [
+        "",
+        ">> setting.cfg not found",
+        "active_video_extractor: yt_dlp",
+        "auto_rename: False",
+        "autoscroll_download_tab: False",
+        "check_for_update: True",
+        "checksum: False",
+        "current_theme: Orange_Black",
+        "custom_user_agent: None",
+        "disable_log_popups: False"
+      ],
+      "passed": true
+    },
+    "imports_only": {
+      "exit_code": 0,
+      "stdout_head": [
+        "",
+        ">> setting.cfg not found",
+        "imported module: plyer , in 0.0 sec",
+        "imported module: certifi , in 0.0 sec",
+        "imported module: youtube_dl 2021.12.17, in 0.5 sec",
+        "imported module: yt_dlp 2026.03.17, in 0.3 sec",
+        "imported module: pycurl , in 0.0 sec",
+        "imported module: PIL , in 0.0 sec"
+      ],
+      "stderr_head": [],
+      "passed": true
+    },
+    "gui_launch": {
+      "alive_after_4s": true,
+      "passed": true
+    }
+  },
+  "overall_passed": true
+}
