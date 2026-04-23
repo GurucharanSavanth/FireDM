@@ -1,0 +1,89 @@
+{
+  "timestamp": "2026-04-23T12:29:35",
+  "targets": {
+    "single_video": {
+      "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+      "overall_passed": false,
+      "harness_error": null,
+      "stages": [
+        {
+          "name": "extractor_ready",
+          "passed": true,
+          "detail": "active=yt_dlp, preferred=yt_dlp",
+          "data": {
+            "active_module": "yt_dlp",
+            "configured": "yt_dlp",
+            "yt_dlp_version": "2026.03.17",
+            "youtube_dl_version": null
+          },
+          "error": null
+        },
+        {
+          "name": "default_is_primary",
+          "passed": true,
+          "detail": "active=yt_dlp, preferred=yt_dlp",
+          "data": {
+            "active_is_primary": true
+          },
+          "error": null
+        },
+        {
+          "name": "create_video_playlist",
+          "passed": false,
+          "detail": "returned 0 items",
+          "data": {
+            "count": 0
+          },
+          "error": null
+        }
+      ]
+    },
+    "playlist": {
+      "url": "https://www.youtube.com/playlist?list=PLt1SIbA8guusxiHz9bveV-UHs_biWFegU",
+      "overall_passed": false,
+      "harness_error": null,
+      "stages": [
+        {
+          "name": "extractor_ready",
+          "passed": true,
+          "detail": "active=yt_dlp, preferred=yt_dlp",
+          "data": {
+            "active_module": "yt_dlp",
+            "configured": "yt_dlp"
+          },
+          "error": null
+        },
+        {
+          "name": "create_video_playlist",
+          "passed": true,
+          "detail": "returned 15 items",
+          "data": {
+            "count": 15
+          },
+          "error": null
+        },
+        {
+          "name": "entry_url_normalization",
+          "passed": true,
+          "detail": "inspected 5, malformed=0",
+          "data": {
+            "inspected": 5,
+            "malformed": []
+          },
+          "error": null
+        },
+        {
+          "name": "process_first_entry",
+          "passed": false,
+          "detail": "processed=False, streams=0",
+          "data": {
+            "title": "What is Apache Kafka_ Brief introduction",
+            "streams": 0,
+            "processed": false
+          },
+          "error": null
+        }
+      ]
+    }
+  }
+}

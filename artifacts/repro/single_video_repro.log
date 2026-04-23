@@ -1,0 +1,4 @@
+[repro] single-video url: https://www.youtube.com/watch?v=jNQXAC9IVRw
+[stage extractor_ready] passed=True detail=active=yt_dlp, preferred=yt_dlp
+[stage default_is_primary] passed=True
+[stage create_video_playlist] passed=False returned 0 items
