@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import platform
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -31,6 +32,7 @@ def main() -> int:
     from firedm.extractor_adapter import SERVICE
     from firedm.ffmpeg_service import locate_ffmpeg
     from firedm.pipeline_logger import PipelineStage
+    from firedm.tool_discovery import resolve_binary_path
 
     video.load_extractor_engines()
     SERVICE.wait_until_ready(timeout=30.0)
@@ -40,6 +42,18 @@ def main() -> int:
         search_dirs=(config.current_directory, config.global_sett_folder or ""),
         operating_system=config.operating_system,
     )
+    deno_path = resolve_binary_path("deno", operating_system=config.operating_system)
+    deno_version = ""
+    if deno_path:
+        result = subprocess.run([deno_path, "--version"], capture_output=True, text=True, check=False)
+        deno_version = (result.stdout or result.stderr or "").splitlines()[0] if (result.stdout or result.stderr) else ""
+
+    try:
+        import yt_dlp_ejs
+
+        yt_dlp_ejs_version = getattr(yt_dlp_ejs, "version", "")
+    except ImportError:
+        yt_dlp_ejs_version = ""
 
     snapshot = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -51,6 +65,11 @@ def main() -> int:
             "path": ff.path,
             "version": ff.version,
             "found": ff.found,
+        },
+        "javascript_runtime": {
+            "deno_path": deno_path,
+            "deno_version": deno_version,
+            "yt_dlp_ejs_version": yt_dlp_ejs_version,
         },
         "config": {
             "active_video_extractor": config.active_video_extractor,

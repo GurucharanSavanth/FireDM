@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-23T13:53:47",
+  "timestamp": "2026-04-23T14:36:10",
   "python": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
   "platform": "Windows-10-10.0.26200-SP0",
   "extractor_service": {
@@ -14,9 +14,14 @@
   },
   "legacy_ytdl_global": "yt_dlp",
   "ffmpeg": {
-    "path": "",
-    "version": "",
-    "found": false
+    "path": "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-essentials_build\\bin\\ffmpeg.exe",
+    "version": "8.1-essentials_build-www.gyan.dev",
+    "found": true
+  },
+  "javascript_runtime": {
+    "deno_path": "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe\\deno.exe",
+    "deno_version": "deno 2.7.13 (stable, release, x86_64-pc-windows-msvc)",
+    "yt_dlp_ejs_version": "0.8.0"
   },
   "config": {
     "active_video_extractor": "yt_dlp",

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from firedm.ffmpeg_commands import (
     build_audio_convert_command,
     build_hls_process_command,
@@ -71,6 +69,7 @@ def test_ffmpeg_service_reports_not_found_when_missing(tmp_path):
         saved_path="",
         search_dirs=(str(tmp_path),),
         operating_system="Windows",
+        include_winget=False,
     )
     assert info.found is False
     assert info.path == ""

@@ -2,7 +2,7 @@
 """
     FireDM
 
-    multi-connections internet download manager, based on "LibCurl", and "youtube_dl".
+    multi-connections internet download manager, based on "LibCurl", "yt_dlp", and Tkinter.
 
     :copyright: (c) 2019-2021 by Mahmoud Elshahat.
     :license: GNU LGPLv3, see LICENSE for more details.
@@ -11,31 +11,33 @@
         This is main application module
 """
 
-# standard modules
-import os
-import subprocess
-import sys
 import argparse
+import importlib
+import os
 import re
 import signal
+import subprocess
+import sys
+import time
+from collections.abc import Sequence
 
 # This code should stay on top to handle relative imports in case of direct call of FireDM.py
 if __package__ is None:
     path = os.path.realpath(os.path.abspath(__file__))
     sys.path.insert(0, os.path.dirname(path))
     sys.path.insert(0, os.path.dirname(os.path.dirname(path)))
-    
+
     __package__ = 'firedm'
-    import firedm
+    __import__(__package__)
 
 
 # local modules
 from . import config, setting
-from .controller import Controller
-from .tkview import MainWindow
 from .cmdview import CmdView
-from .utils import parse_urls, parse_bytes, format_bytes
+from .controller import Controller
 from .setting import load_setting
+from .tkview import MainWindow
+from .utils import format_bytes, parse_bytes, parse_urls
 from .version import __version__
 
 
@@ -47,7 +49,7 @@ def pars_args(arguments):
 
     description = """FireDM is an open source Download Manager with multi-connections, high speed 
         engine, it can download general files and video files from youtube and tons of other streaming websites. 
-        Developed in Python, based on "LibCurl", "youtube_dl", and "Tkinter". 
+        Developed in Python, based on "LibCurl", "yt_dlp", and "Tkinter".
         Source: https://github.com/firedm/FireDM """
 
     def iterable(txt):
@@ -108,7 +110,7 @@ def pars_args(arguments):
     general.add_argument(
         '--ignore-config', dest='ignore_config', default=argparse.SUPPRESS,
         action='store_true',
-        help='Do not load settings from config file. in ~/.config/FireDM/ or (APPDATA/FireDM/ on Windows)')
+        help='Do not load settings from config file. in ~/.config/FireDM/ or (APPDATA/.FireDM/ on Windows)')
     general.add_argument(
         '--dlist', dest='ignore_dlist',
         action='store_false', default=argparse.SUPPRESS,
@@ -142,7 +144,7 @@ def pars_args(arguments):
         '-o', '--output',
         type=str, metavar='<PATH>', default=argparse.SUPPRESS,
         help='output file path, filename, or download folder: if input value is a file name without path, file will '
-             f'be saved in current folder, if input value is a folder path only, '
+             'be saved in current folder, if input value is a folder path only, '
              'remote file name will be used, '
              'be careful with video extension in filename, since ffmpeg will convert video based on extension')
     filesystem.add_argument(
@@ -181,8 +183,8 @@ def pars_args(arguments):
     vid.add_argument(
         '--engine', dest='active_video_extractor',
         type=str, metavar='ENGINE', default=argparse.SUPPRESS,
-        help="select video extractor engine, available choices are: ('youtube_dl', and 'yt_dlp'), "
-             f"default={config.active_video_extractor}")
+        help="select video extractor engine, default=yt_dlp. youtube_dl is deprecated legacy fallback only. "
+             f"current={config.active_video_extractor}")
     vid.add_argument(
         '--quality', dest='quality',
         type=str, metavar='QUALITY', default=argparse.SUPPRESS,
@@ -308,6 +310,63 @@ def pars_args(arguments):
     return sett
 
 
+def ensure_standard_streams() -> None:
+    """Provide dummy stdio handles when GUI-only frozen launchers hide them."""
+
+    try:
+        sys.stdout.write('\n')
+        sys.stdout.flush()
+    except AttributeError:
+        class Dummy:
+            def __getattr__(self, _name):
+                return lambda *args, **kwargs: None
+
+        for stream_name in ('stdout', 'stderr', 'stdin'):
+            setattr(sys, stream_name, Dummy())
+
+
+def is_gui_mode(argv: Sequence[str]) -> bool:
+    return len(argv) == 1 or '--gui' in argv
+
+
+def import_diagnostics() -> None:
+    total_time = 0.0
+
+    def getversion(mod):
+        return (
+            getattr(mod, '__version__', '')
+            or getattr(getattr(mod, 'version', None), '__version__', '')
+            or str(getattr(mod, 'version', '') or '')
+        )
+
+    modules = [
+        ("plyer", False),
+        ("certifi", False),
+        ("yt_dlp", False),
+        ("yt_dlp_ejs", False),
+        ("pycurl", False),
+        ("PIL", False),
+        ("pystray", False),
+        ("awesometkinter", False),
+        ("tkinter", False),
+        ("youtube_dl", True),
+    ]
+
+    for module, optional in modules:
+        start = time.time()
+
+        try:
+            imported_module = importlib.import_module(module)
+            version = getversion(imported_module)
+            total_time += time.time() - start
+            print(f'imported module: {module} {version}, in {round(time.time() - start, 1)} sec')
+        except Exception as e:
+            status = 'optional import skipped' if optional else 'package import error'
+            print(module, f'{status}:', e)
+
+    print(f'Done, importing modules, total time: {round(total_time, 2)} sec ...')
+
+
 def main(argv=sys.argv):
     """
     app main
@@ -315,20 +374,9 @@ def main(argv=sys.argv):
         argv(list): command line arguments vector, argv[0] is the script pathname if known
     """
 
-    # workaround for missing stdout/stderr for windows Win32GUI app e.g. cx_freeze gui app
-    try:
-        sys.stdout.write('\n')
-        sys.stdout.flush()
-    except AttributeError:
-        # dummy class to export a "do nothing methods", expected methods to be called (read, write, flush, close) 
-        class Dummy:
-            def __getattr__(*args):
-                return lambda *args: None
+    ensure_standard_streams()
 
-        for x in ('stdout', 'stderr', 'stdin'):
-            setattr(sys, x, Dummy())
-
-    guimode = True if len(argv) == 1 or '--gui' in argv else False
+    guimode = is_gui_mode(argv)
     cmdmode = not guimode
 
     # read config file
@@ -368,7 +416,7 @@ def main(argv=sys.argv):
 
     config.__dict__.update(sett)
 
-    if sett.get('config'):
+    if sett.get('show_settings'):
         for key in config.settings_keys:
             value = getattr(config, key)
             print(f'{key}: {value}')
@@ -382,29 +430,7 @@ def main(argv=sys.argv):
         sys.exit(0)
 
     if sett.get('imports_only'):
-        import importlib, time
-        total_time = 0
-
-        def getversion(mod):
-            try:
-                version = mod.version.__version__
-            except:
-                version = ''
-            return version
-
-        for module in ['plyer', 'certifi', 'youtube_dl', 'yt_dlp', 'pycurl', 'PIL', 'pystray', 'awesometkinter',
-                       'tkinter']:
-            start = time.time()
-
-            try:
-                m = importlib.import_module(module)
-                version = getversion(m)
-                total_time += time.time() - start
-                print(f'imported module: {module} {version}, in {round(time.time() - start, 1)} sec')
-            except Exception as e:
-                print(module, 'package import error:', e)
-
-        print(f'Done, importing modules, total time: {round(total_time, 2)} sec ...')
+        import_diagnostics()
         sys.exit(0)
 
     # set ignore_dlist argument to True in cmdline mode if not explicitly used
@@ -463,4 +489,3 @@ def main(argv=sys.argv):
 
 if __name__ == '__main__':
     main(sys.argv)
-

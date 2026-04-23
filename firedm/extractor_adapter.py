@@ -17,9 +17,9 @@ from __future__ import annotations
 import importlib
 import threading
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Callable, Iterable
 
 SUPPORTED_EXTRACTORS = ("yt_dlp", "youtube_dl")
 PRIMARY_EXTRACTOR = "yt_dlp"

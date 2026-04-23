@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from firedm import video
 from firedm.extractor_adapter import (
     FALLBACK_EXTRACTOR,
     PRIMARY_EXTRACTOR,
@@ -76,3 +77,14 @@ def test_snapshot_reports_both_engines():
     assert snap["fallback_loaded"] is True
     assert snap["versions"][PRIMARY_EXTRACTOR] == "2026.03.17"
     assert snap["versions"][FALLBACK_EXTRACTOR] == "2021.12.17"
+
+
+def test_yt_dlp_options_include_discovered_deno_runtime(monkeypatch):
+    monkeypatch.setattr(video, "ytdl", SimpleNamespace(__name__=PRIMARY_EXTRACTOR))
+    monkeypatch.setattr(video, "resolve_deno_runtime_path", lambda: r"C:\Tools\deno.exe")
+    monkeypatch.setattr(video, "resolve_ffmpeg_path", lambda **_: r"C:\Tools\ffmpeg.exe")
+
+    options = video.get_ytdl_options()
+
+    assert options["js_runtimes"] == {"deno": {"path": r"C:\Tools\deno.exe"}}
+    assert options["ffmpeg_location"] == r"C:\Tools\ffmpeg.exe"

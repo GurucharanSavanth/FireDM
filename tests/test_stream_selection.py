@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from firedm import config
 from firedm.video import Stream, Video
 

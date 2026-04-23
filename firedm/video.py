@@ -32,7 +32,9 @@ from .ffmpeg_commands import (
     build_merge_command,
     dash_audio_extension_for,
 )
+from .ffmpeg_service import resolve_ffmpeg_path
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
+from .tool_discovery import resolve_binary_path
 from .utils import (log, validate_file_name, get_headers, format_bytes, run_command, delete_file, download, rename_file,
                     run_thread, import_file)
 
@@ -65,9 +67,29 @@ class Logger(object):
         return "youtube-dl Logger"
 
 
+def resolve_deno_runtime_path():
+    return resolve_binary_path(
+        "deno",
+        operating_system=config.operating_system,
+    )
+
+
 def get_ytdl_options():
-    # reference: https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/__init__.py#L317
     ydl_opts = {'ignoreerrors': True, 'logger': Logger()}  # 'prefer_insecure': False, 'no_warnings': False,
+
+    active_extractor = getattr(ytdl, "__name__", None) or EXTRACTOR_SERVICE.snapshot().get("active")
+    if active_extractor == PRIMARY_EXTRACTOR:
+        deno_path = resolve_deno_runtime_path()
+        ydl_opts["js_runtimes"] = {"deno": {"path": deno_path} if deno_path else {}}
+
+        ffmpeg_path = resolve_ffmpeg_path(
+            saved_path=config.ffmpeg_actual_path or "",
+            search_dirs=(config.current_directory, config.global_sett_folder or ""),
+            operating_system=config.operating_system,
+        )
+        if ffmpeg_path:
+            ydl_opts["ffmpeg_location"] = ffmpeg_path
+
     if config.proxy:
         # youtube-dl accept socks4a, but not socks5h,
         # https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/utils.py#L5404
@@ -1707,8 +1729,6 @@ def process_video(vid):
             raise e
     finally:
         vid.busy = False
-
-
 
 
 

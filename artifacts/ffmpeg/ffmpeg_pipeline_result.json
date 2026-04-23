@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-04-23T13:47:39",
+  "timestamp": "2026-04-23T14:36:09",
   "ffmpeg": {
-    "found": false,
-    "path": "",
-    "version": ""
+    "found": true,
+    "path": "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-essentials_build\\bin\\ffmpeg.exe",
+    "version": "8.1-essentials_build-www.gyan.dev"
   },
   "merge_command": {
     "fast_uses_stream_copy": true,

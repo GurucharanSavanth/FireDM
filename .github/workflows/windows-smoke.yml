@@ -1,0 +1,62 @@
+name: windows-smoke
+
+on:
+  push:
+    paths:
+      - "firedm/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "setup.py"
+      - "pyproject.toml"
+      - "firedm.py"
+      - "scripts/firedm-win.spec"
+      - "scripts/windows-build.ps1"
+      - ".github/workflows/windows-smoke.yml"
+  pull_request:
+    paths:
+      - "firedm/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "setup.py"
+      - "pyproject.toml"
+      - "firedm.py"
+      - "scripts/firedm-win.spec"
+      - "scripts/windows-build.ps1"
+      - ".github/workflows/windows-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e ".[dev,build]"
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Lint
+        run: python -m ruff check firedm/FireDM.py firedm/app_paths.py firedm/extractor_adapter.py firedm/ffmpeg_service.py firedm/setting.py firedm/update.py tests
+
+      - name: Build Python package
+        run: python -m build
+
+      - name: Build Windows distribution
+        run: python -m PyInstaller --clean --noconfirm scripts/firedm-win.spec
+
+      - name: Smoke source and packaged entrypoints
+        shell: pwsh
+        run: |
+          python -m firedm --help
+          python firedm.py --imports-only
+          .\dist\FireDM\firedm.exe --help

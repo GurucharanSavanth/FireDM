@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from firedm.extractor_adapter import (
     FALLBACK_EXTRACTOR,
     PRIMARY_EXTRACTOR,

@@ -1,121 +1,70 @@
 # Technical Decisions
 
-Each row answers one of the mandatory decisions listed in the prompt.
-
 ## 1. Should `yt_dlp` be the primary extractor?
 
-**Yes.** `yt_dlp==2026.03.17` is actively maintained; `youtube_dl==2021.12.17`
-is effectively unmaintained. Every mainline extraction path now goes
-through the `ExtractorService` with `PRIMARY_EXTRACTOR = "yt_dlp"`.
+Yes. The maintained extractor stack is `yt-dlp[default]>=2026.3.17` with
+`yt-dlp-ejs` and Deno. `youtube_dl` is no longer safe as a default YouTube path.
 
-## 2. Does the legacy extractor path remain supported fallback, optional compatibility path, or deprecated/removed?
+## 2. What happens to `youtube_dl`?
 
-**Optional compatibility fallback only.** It is:
+It remains optional compatibility only. It is in `[legacy]`, may be loaded if
+installed, and is never selected while `yt_dlp` is importable.
 
-- still declared in `pyproject.toml` for now;
-- still loaded best-effort at startup so user `InfoExtractor` plugins
-  keep working;
-- never chosen as the runtime default when `yt_dlp` is importable.
+## 3. How is readiness enforced?
 
-## 3. How is extractor readiness enforced?
+`ExtractorService.wait_until_ready(timeout=45.0)` gates video requests. Timeout
+paths emit structured pipeline events instead of spinning forever.
 
-Via `ExtractorService.wait_until_ready(timeout=45.0)`. The previous
-`while not ytdl: time.sleep(1)` spin is gone. Timeout emits a structured
-`extractor_ready status=fail` event and the calling function returns
-`None` explicitly.
+## 4. How is playlist entry normalization handled?
 
-## 4. How is playlist entry URL normalization handled robustly?
+`firedm/playlist_entry.py::normalize_entry` owns URL reconstruction. YouTube
+bare IDs are rebuilt into watch URLs; unsupported ambiguous entries are rejected
+with diagnostics instead of guessed.
 
-`firedm/playlist_entry.py :: normalize_entry` returns a `NormalizedEntry`
-with `url`, `source_field`, `ie_key`, `was_normalized`. YouTube-shape
-(11-char) bare ids are inferred as YouTube; Vimeo numeric ids are
-inferred as Vimeo with `ie_key`; unknown combinations return `None`
-rather than fabricating a URL.
+## 5. How are failures surfaced?
 
-## 5. How are failures surfaced instead of swallowed?
+`firedm/pipeline_logger.py` emits stage/status/key-value events for extractor
+load/select, metadata fetch, playlist parse, stream build/select, enqueue, and
+ffmpeg merge.
 
-`firedm/pipeline_logger.py` emits
-`[pipeline] stage=<stage> status=<ok|fail|warn|skip> key=value ...`
-events through the app's existing `log()` sink. Boundaries instrumented:
+## 6. How are ffmpeg failures diagnosable?
 
-- extractor load / select / ready
-- metadata fetch
-- playlist parse / entry normalize
-- stream build / select
-- ffmpeg discover / merge
-- download enqueue
+`firedm/ffmpeg_commands.py` owns command construction. `ffmpeg_service` locates
+the binary from explicit paths, `PATH`, or Winget package dirs. `video.py` passes
+the located path to yt-dlp via `ffmpeg_location`.
 
-Swallowed exceptions inside `get_media_info`, `process_video`, and
-`create_video_playlist` have been narrowed and every branch emits a
-pipeline event.
+## 7. What refactor was necessary?
 
-## 6. How are ffmpeg merge failures made diagnosable?
+The smallest maintainable split is:
 
-`merge_video_audio` emits `ffmpeg_merge` events with:
+- `extractor_adapter.py` for active extractor state
+- `playlist_entry.py` for entry normalization
+- `playlist_builder.py` for info-dict walking
+- `ffmpeg_commands.py` and `ffmpeg_service.py` for media tooling
+- `tool_discovery.py` for external executable discovery
+- `pipeline_logger.py` for observability
 
-- `start` — the argv triple (video, audio, output, ffmpeg path)
-- `warn` — fast stream-copy failed, retrying transcode
-- `ok` / `fail` — which strategy succeeded, or the final error
+## 8. Exact primary dependency
 
-Command construction lives in `firedm/ffmpeg_commands.py` and is
-unit-testable without running the binary
-(`tests/test_ffmpeg_pipeline.py`).
+`yt-dlp[default]>=2026.3.17`. Verified installed versions:
+`yt_dlp==2026.03.17`, `yt-dlp-ejs==0.8.0`.
 
-## 7. What minimal architectural refactor is necessary to make this maintainable?
+## 9. Deprecated surfaces retired or isolated
 
-- `firedm/extractor_adapter.py :: ExtractorService` — one owner of
-  "which extractor is active."
-- `firedm/playlist_entry.py` — one rule for turning an entry dict into
-  a URL.
-- `firedm/playlist_builder.py` — one owner of "walk this info dict and
-  return Videos."
-- `firedm/ffmpeg_commands.py` — pure argv builders.
-- `firedm/pipeline_logger.py` — one vocabulary for structured events.
+- `youtube_dl` default selection: retired
+- `youtube_dl` default dependency: retired
+- direct `youtube_dl.extractor.*` HLS hardcode: removed
+- fallback random-user-agent path: isolated to optional fallback load
 
-The controller keeps orchestration (queue, observer, ffmpeg check,
-thumbnail side-effects) but no longer owns dict walking or command
-strings.
+## 10. Old internals no longer allowed in mainline
 
-## 8. Which exact maintained extractor package/version family is the new primary dependency?
+New code must not import `youtube_dl` directly, read
+`config.active_video_extractor` as authority, or call `youtube_dl.extractor.*`
+outside the adapter/fallback boundary.
 
-`yt_dlp` (primary). Baseline environment ships `yt_dlp==2026.03.17`.
-`pyproject.toml` pins `yt_dlp>=2024.12.0` as a hard requirement.
+## 11. Version policy
 
-## 9. Which deprecated extractor package(s) and API surfaces are retired, isolated, or removed?
-
-- `youtube_dl` package — demoted from default extractor to
-  compatibility-only fallback.
-- `youtube_dl.extractor.common.InfoExtractor._parse_m3u8_formats`
-  hardcode — replaced with `active.extractor.common.InfoExtractor._parse_m3u8_formats`
-  resolved through the service.
-- `youtube_dl.utils.random_user_agent` — still called, but only on the
-  fallback load path.
-- Races in `load_extractor_engines` — removed.
-
-Full inventory: `artifacts/extractor/deprecated_api_inventory.md`.
-
-## 10. Which old extractor internals are no longer allowed in the mainline code path?
-
-- Direct `from youtube_dl import …` outside `load_extractor_engines`.
-- Direct references to `youtube_dl.extractor.*` anywhere.
-- Direct reads of `config.active_video_extractor` as the authority for
-  "which extractor is active" (must go through
-  `ExtractorService.active_name()`).
-
-## 11. How does dependency pinning / version policy ensure the app keeps working when the extractor package updates?
-
-- `pyproject.toml` pins lower bounds only; we always want the latest
-  compatible `yt_dlp`.
-- `_coerce_number` normalizes numeric drift at the boundary so new
-  `None`-valued fields can't crash `Stream.__init__`.
-- `_process_streams` contains per-format failures so any future format
-  that still breaks gets skipped, not swallowed.
-- `scripts/run_regression_suite.py` is the monthly-bump gate.
-- `scripts/repro_youtube_bug.py` is the live-network gate.
-
-## Supported Python baseline
-
-- verified: 3.10.11
-- declared in pyproject: `>=3.10,<3.13`
-- not yet locally verified in this sprint: 3.11 and 3.12 — tracked in
-  `docs/known-issues.md`.
+Use lower-bound policy on the verified maintained family:
+`yt-dlp[default]>=2026.3.17`. Monthly extractor bumps must pass
+`scripts/run_regression_suite.py`, `scripts/repro_youtube_bug.py`, and packaged
+diagnostics.

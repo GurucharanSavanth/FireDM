@@ -55,8 +55,10 @@ aborts `Video.__init__` before the stream menu is built.
 | R7 | Unbounded `while not ytdl: time.sleep(1)` in `get_media_info` | medium — hangs forever if both extractors fail to import |
 | R8 | `_parse_m3u8_formats` hardcoded to `youtube_dl` | medium — HLS flows break if fallback import fails |
 | R9 | `create_video_playlist` playlist entry URL pick: `webpage_url or url or id` | high — id-only entries produced invalid Video URLs |
+| R10 | missing enforced `yt-dlp[default]` / EJS policy | high — current YouTube challenges need `yt-dlp-ejs` plus a JS runtime |
+| R11 | ffmpeg present but hidden from stale shell `PATH` | medium — yt-dlp warned even though ffmpeg was installed |
 
-All nine are addressed by commits 2 through 7.
+All eleven are addressed by the modernization phases.
 
 ## Why the regression suite missed this before
 

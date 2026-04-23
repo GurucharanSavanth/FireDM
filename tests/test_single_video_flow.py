@@ -8,13 +8,11 @@ the user-reported P0 defect.
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from firedm import config
-from firedm.video import Video, _coerce_number
 from firedm.downloaditem import Segment  # noqa: F401 — keep package import cheap
+from firedm.video import Video, _coerce_number
 
 
 def _mp4_720p():

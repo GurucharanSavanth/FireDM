@@ -1,54 +1,42 @@
 # Extractor Dependency Audit
 
-Generated after Commit 3.
+Generated after extractor modernization refresh on 2026-04-23.
 
-## Current extractors in the environment
+## Current Extractor Stack
 
-| Package | Version | Role | Maintenance status |
+| Package/tool | Version | Role | Policy |
 | --- | --- | --- | --- |
-| `yt_dlp` | `2026.03.17` | **Primary**, default runtime extractor | Actively maintained (monthly releases) |
-| `youtube_dl` | `2021.12.17` | Fallback only; retained for user InfoExtractor plugins | Effectively unmaintained since 2022 |
+| `yt_dlp` | `2026.03.17` | Primary extractor | Default/mainline |
+| `yt-dlp-ejs` | `0.8.0` | YouTube JS challenge scripts | Required via `yt-dlp[default]` |
+| Deno | `2.7.13` | External JS runtime | Recommended runtime; discovered from Winget |
+| `youtube_dl` | `2021.12.17` | Legacy extractor | Optional fallback only |
+| ffmpeg | `8.1-essentials_build-www.gyan.dev` | Media post-processing | External binary; passed to yt-dlp |
 
-## Packaging metadata
+## Packaging Metadata
 
 - `pyproject.toml`
-  - `yt_dlp>=2024.12.0` (hard requirement)
-  - `youtube_dl>=2021.12.17` (kept for compatibility, scheduled for future removal)
-- `setup.py` — shim, mirrors pyproject.
-- `scripts/firedm-win.spec` — both modules collected as hidden imports.
+  - `yt-dlp[default]>=2026.3.17`
+  - `youtube_dl>=2021.12.17` only in optional extra `[legacy]`
+- `requirements.txt`
+  - default install includes `yt-dlp[default]`, not `youtube_dl`
+- `scripts/firedm-win.spec`
+  - collects `yt_dlp`, `yt_dlp_ejs` modules/data, and optional `youtube_dl`
+    only when present
 
-## Extractor API surface used inside the repo
+## Extractor API Surface
 
-| Symbol | Callers | Replacement after Commit 3 |
+| Symbol | Caller | Status |
 | --- | --- | --- |
-| `ytdl.YoutubeDL(options)` | `firedm/video.py :: get_media_info`, `Video.__init__`, `Video.get_title` | unchanged (public API, works on both extractors) |
-| `ytdl.utils.std_headers` | `firedm/video.py :: get_ytdl_options` (Referer) | unchanged (public utility in both extractors), guarded against `None` extractor |
-| `youtube_dl.extractor.common.InfoExtractor._parse_m3u8_formats` | `firedm/video.py :: pre_process_hls / refresh_urls` | **removed hardcode** — now `active.extractor.common.InfoExtractor._parse_m3u8_formats` via `ExtractorService.active_module()` |
-| `youtube_dl.utils.random_user_agent` | `firedm/video.py :: load_extractor_engines` | unchanged, still used when fallback loads (primary path uses yt_dlp UA rotation built in) |
-| `youtube_dl.InfoExtractor` subclass registration | user `<sett>/extractors/*.py` plugins | unchanged; `load_user_extractors(engine=…)` now works for both primary and fallback |
-
-## Risk snapshot
-
-- **Private-API reliance on `_parse_m3u8_formats`**: still a private method
-  on `InfoExtractor`; both extractor families currently expose it. Flagged
-  as a follow-up in Commit 6 ffmpeg / HLS work.
-- **`std_headers` mutation**: still module-global in both extractors.
-  Controlled risk. Commit 2 added try/except + structured logging.
-- **User-extractor compatibility**: plugins that subclass
-  `youtube_dl.InfoExtractor` still register against `youtube_dl` only. A
-  future slice should teach `load_user_extractors` to register against
-  whichever engine a plugin declares.
-
-## Policy enforcement
-
-- `choose_extractor_name(...)` places `PRIMARY_EXTRACTOR` first.
-- `ExtractorService._reselect_active_locked` re-runs selection on every
-  engine load — no "last thread wins" race.
-- `set_default_extractor(preferred)` with `preferred=FALLBACK_EXTRACTOR`
-  emits a `extractor_select status=warn` event and keeps the primary.
+| `ytdl.YoutubeDL(options)` | `firedm/video.py` | Public API retained |
+| `ytdl.utils.std_headers` | Referer handling | Guarded legacy-compatible mutation |
+| `youtube_dl.extractor.common.InfoExtractor._parse_m3u8_formats` | HLS refresh | Direct hardcode removed; active module used |
+| `youtube_dl.utils.random_user_agent` | fallback load only | Deprecated fallback-only |
+| `yt_dlp` `js_runtimes` option | `get_ytdl_options()` | Deno path passed explicitly |
+| `yt_dlp` `ffmpeg_location` option | `get_ytdl_options()` | discovered ffmpeg passed explicitly |
 
 ## Evidence
 
-- Proof of default selection: `artifacts/extractor/default_selection_proof.json`
-- Observability matrix: `artifacts/diagnostics/observability_matrix.md`
-- Policy doc: `docs/extractor-migration-policy.md`
+- `artifacts/extractor/default_selection_proof.json`
+- `artifacts/extractor/active_extractor_report.json`
+- `artifacts/repro/repro_summary.json`
+- `artifacts/diagnostics/runtime_snapshot.json`

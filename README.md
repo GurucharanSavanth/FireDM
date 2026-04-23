@@ -13,6 +13,14 @@ with multi-connections, high speed engine,
 it downloads general files and videos from youtube and tons of other streaming websites . <br>
 Developed in Python, based on "LibCurl", and "youtube_dl".
 
+## Maintainer quick start
+- Windows-first developer setup: [bootstrap/windows-dev-setup.md](bootstrap/windows-dev-setup.md)
+- Architecture summary: [docs/architecture.md](docs/architecture.md)
+- Dependency policy: [docs/dependency-strategy.md](docs/dependency-strategy.md)
+- Test instructions: [docs/testing.md](docs/testing.md)
+- Windows packaging: [docs/windows-build.md](docs/windows-build.md)
+- Known limitations: [docs/known-issues.md](docs/known-issues.md)
+
 [**Download Latest version!!**](https://github.com/firedm/FireDM/releases/latest)
 
 ![screenshot](https://user-images.githubusercontent.com/58998813/134947539-0bec3cf4-fd02-47d4-b9be-e370c645d648.png)
@@ -249,4 +257,3 @@ or email to: info.pyidm@gmail.com <br>
 Author:  
 Mahmoud Elshahat  
 2019-2022
-

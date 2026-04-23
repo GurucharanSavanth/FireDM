@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-23T13:41:53",
+  "timestamp": "2026-04-23T14:36:21",
   "targets": {
     "single_video": {
       "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
@@ -39,10 +39,10 @@
         {
           "name": "stream_menu",
           "passed": true,
-          "detail": "17 streams, title='Me at the zoo'",
+          "detail": "20 streams, title='Me at the zoo'",
           "data": {
-            "streams": 17,
-            "menu_entries": 18,
+            "streams": 20,
+            "menu_entries": 21,
             "title": "Me at the zoo"
           },
           "error": null
@@ -56,6 +56,53 @@
             "mediatype": "dash",
             "extension": "mp4",
             "has_eff_url": true
+          },
+          "error": null
+        }
+      ]
+    },
+    "playlist": {
+      "url": "https://www.youtube.com/playlist?list=PLt1SIbA8guusxiHz9bveV-UHs_biWFegU",
+      "overall_passed": true,
+      "harness_error": null,
+      "stages": [
+        {
+          "name": "extractor_ready",
+          "passed": true,
+          "detail": "active=yt_dlp, preferred=yt_dlp",
+          "data": {
+            "active_module": "yt_dlp",
+            "configured": "yt_dlp"
+          },
+          "error": null
+        },
+        {
+          "name": "create_video_playlist",
+          "passed": true,
+          "detail": "returned 15 items",
+          "data": {
+            "count": 15
+          },
+          "error": null
+        },
+        {
+          "name": "entry_url_normalization",
+          "passed": true,
+          "detail": "inspected 5, malformed=0",
+          "data": {
+            "inspected": 5,
+            "malformed": []
+          },
+          "error": null
+        },
+        {
+          "name": "process_first_entry",
+          "passed": true,
+          "detail": "processed=True, streams=49",
+          "data": {
+            "title": "What is Apache Kafka\uff1f Brief introduction",
+            "streams": 49,
+            "processed": true
           },
           "error": null
         }

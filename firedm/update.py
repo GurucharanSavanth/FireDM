@@ -10,23 +10,42 @@
 # todo: change docstring to google format and clean unused code
 # check and update application
 
-import hashlib
 import json
-import py_compile
+import os
 import re
 import shutil
 import sys
-import zipfile, tarfile
-import queue
+import tarfile
 import time
-from threading import Thread
-from distutils.dir_util import copy_tree
-import os
 import webbrowser
+import zipfile
+from threading import Thread
+
 from packaging.version import parse as parse_version
 
 from . import config
-from .utils import log, download, run_command, delete_folder, delete_file
+from .utils import delete_folder, download, log, run_command
+
+
+def self_update_supported(*, frozen=None, is_appimage=None):
+    """Source installs can self-update; packaged Windows builds should upgrade via a new release."""
+
+    frozen = config.FROZEN if frozen is None else frozen
+    is_appimage = config.isappimage if is_appimage is None else is_appimage
+    return not frozen or is_appimage
+
+
+def get_update_instructions(*, frozen=None, is_appimage=None):
+    frozen = config.FROZEN if frozen is None else frozen
+    is_appimage = config.isappimage if is_appimage is None else is_appimage
+
+    if frozen and not is_appimage:
+        return (
+            'Packaged Windows builds are update-check only. '
+            'Download a newer release instead of patching packages in place.'
+        )
+
+    return 'Updates can be applied in the current Python environment.'
 
 
 def open_update_link():
@@ -129,7 +148,7 @@ def get_pkg_latest_version(pkg, fetch_url=True):
             releases = j.get('releases', {})
             if releases:
 
-                latest_version = max([parse_version(release) for release in releases.keys()]) or None
+                latest_version = max([parse_version(release) for release in releases]) or None
                 if latest_version:
                     latest_version = str(latest_version)
 
@@ -151,7 +170,9 @@ def get_pkg_latest_version(pkg, fetch_url=True):
 
 def get_target_folder(pkg):
     # determin target folder
-    current_directory = config.current_directory
+    if not self_update_supported():
+        return None
+
     if config.FROZEN:  # windows cx_freeze
         # current directory is the directory of exe file
         target_folder = os.path.join(config.current_directory, 'lib')
@@ -179,11 +200,15 @@ def update_pkg(pkg, url):
 
     target_folder = get_target_folder(pkg)
 
+    if config.FROZEN and not target_folder:
+        log(get_update_instructions(), showpopup=True)
+        return False
+
     # check if the application is frozen, e.g. runs from a windows cx_freeze executable
     # if run from source, we will update system installed package and exit
     if not target_folder:
         cmd = f'"{sys.executable}" -m pip install {pkg} --upgrade'
-        error, output = run_command(cmd)
+        error, _output = run_command(cmd)
         if not error:
             log(f'successfully updated {pkg}')
         return True
@@ -269,7 +294,8 @@ def update_pkg(pkg, url):
         log(f'{pkg} ..... done updating')
         return True
     except Exception as e:
-        log(f'update_pkg()> error', e)
+        log('update_pkg()> error', e)
+        return False
 
 
 def rollback_pkg_update(pkg):
@@ -282,7 +308,7 @@ def rollback_pkg_update(pkg):
     target_folder = get_target_folder(pkg)
 
     if not target_folder:
-        log(f'rollback {pkg} update is currently working on windows exe and Linux AppImage versions', showpopup=True)
+        log(get_update_instructions(), showpopup=True)
         return
 
     log(f'rollback last {pkg} update ................................')
@@ -306,7 +332,4 @@ def rollback_pkg_update(pkg):
 
     except Exception as e:
         log('rollback_pkg_update()> error', e)
-
-
-
 

@@ -7,34 +7,23 @@
     :license: GNU LGPLv3, see LICENSE for more details.
 """
 
-import os
 import json
-import shutil
+import os
 
-from . import config
-from . import downloaditem
-from . import model
+from . import config, model
+from .app_paths import choose_settings_dir, resolve_global_settings_dir
 from .utils import log, update_object
 
 
 def get_global_sett_folder():
     """return a proper global setting folder"""
-    home_folder = os.path.expanduser('~')
-
-    if config.operating_system == 'Windows':
-        roaming = os.getenv('APPDATA')  # return APPDATA\Roaming\ under windows
-        _sett_folder = os.path.join(roaming, f'.{config.APP_NAME}')
-
-    elif config.operating_system == 'Linux':
-        _sett_folder = f'{home_folder}/.config/{config.APP_NAME}/'
-
-    elif config.operating_system == 'Darwin':
-        _sett_folder = f'{home_folder}/Library/Application Support/{config.APP_NAME}/'
-
-    else:
-        _sett_folder = config.current_directory
-
-    return _sett_folder
+    return os.fspath(
+        resolve_global_settings_dir(
+            config.APP_NAME,
+            config.operating_system,
+            current_directory=config.current_directory,
+        )
+    )
 
 
 config.global_sett_folder = get_global_sett_folder()
@@ -42,32 +31,13 @@ config.global_sett_folder = get_global_sett_folder()
 
 def locate_setting_folder():
     """check local folder and global setting folder for setting.cfg file"""
+    setting_folder = choose_settings_dir(config.current_directory, config.global_sett_folder)
 
-    # look for previous setting file
-    if os.path.isfile(os.path.join(config.current_directory, 'setting.cfg')):
-        setting_folder = config.current_directory
-    elif os.path.isfile(os.path.join(config.global_sett_folder, 'setting.cfg')):
-        setting_folder = config.global_sett_folder
-    else:
-        # no setting file found will check local folder for writing permission, otherwise will return global sett folder
-        try:
-            folder = config.current_directory
-            with open(os.path.join(folder, 'test'), 'w') as test_file:
-                test_file.write('0')
-            os.unlink(os.path.join(folder, 'test'))
-            setting_folder = config.current_directory
+    if os.fspath(setting_folder) != config.current_directory:
+        log("No enough permission to store setting at local folder:", config.current_directory)
+        log('Global setting folder will be selected:', config.global_sett_folder)
 
-        except (PermissionError, OSError):
-            log("No enough permission to store setting at local folder:", folder)
-            log('Global setting folder will be selected:', config.global_sett_folder)
-
-            # create global setting folder if it doesn't exist
-            if not os.path.isdir(config.global_sett_folder):
-                os.mkdir(config.global_sett_folder)
-
-            setting_folder = config.global_sett_folder
-
-    return setting_folder
+    return os.fspath(setting_folder)
 
 
 config.sett_folder = locate_setting_folder()
@@ -85,7 +55,7 @@ def load_d_map():
 
         # get data
         file = os.path.join(config.sett_folder, 'downloads.dat')
-        with open(file, 'r') as f:
+        with open(file) as f:
             # expecting a list of dictionaries
             data = json.load(f)
 
@@ -98,7 +68,7 @@ def load_d_map():
 
         # get thumbnails
         file = os.path.join(config.sett_folder, 'thumbnails.dat')
-        with open(file, 'r') as f:
+        with open(file) as f:
             # expecting a list of dictionaries
             thumbnails = json.load(f)
 
@@ -123,11 +93,11 @@ def load_d_map():
 
     except Exception as e:
         log(f'load_d_map()>: {e}')
-        raise e
-    finally:
-        if not isinstance(d_map, dict):
-            d_map = {}
-        return d_map
+        return {}
+
+    if not isinstance(d_map, dict):
+        return {}
+    return d_map
 
 
 def save_d_map(d_map):
@@ -169,18 +139,17 @@ def get_user_settings():
     try:
         # log('Load user setting from', config.sett_folder)
         file = os.path.join(config.sett_folder, 'setting.cfg')
-        with open(file, 'r') as f:
+        with open(file) as f:
             settings = json.load(f)
 
     except FileNotFoundError:
         log('setting.cfg not found')
     except Exception as e:
         log('load_setting()> ', e)
-    finally:
-        if not isinstance(settings, dict):
-            settings = {}
 
-        return settings
+    if not isinstance(settings, dict):
+        return {}
+    return settings
 
 
 def load_setting():
@@ -207,7 +176,4 @@ def save_setting():
             log('settings saved in:', file)
     except Exception as e:
         log('save_setting() > error', e)
-
-
-
 

@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-04-23T14:25:22",
+  "python": ">=3.10,<3.13",
+  "runtime": {
+    "primary_extractor": "yt-dlp[default]>=2026.3.17",
+    "legacy_extractor": "youtube_dl>=2021.12.17 optional extra only",
+    "transport": "pycurl>=7.45.2",
+    "ffmpeg": "external binary, discovered from explicit path, PATH, or Winget package dir",
+    "javascript_runtime": "Deno 2.0.0+ recommended; Deno 2.7.13 verified"
+  },
+  "tooling": {
+    "test": "pytest",
+    "lint": "ruff scoped to modernized seams",
+    "type_check": "mypy scoped to service modules",
+    "build": "python -m build",
+    "windows_package": "PyInstaller spec"
+  },
+  "deferred": [
+    "uv adoption",
+    "bundled ffmpeg",
+    "bundled Deno",
+    "full-repo Ruff",
+    "full-repo mypy",
+    "removal of optional youtube_dl fallback"
+  ]
+}

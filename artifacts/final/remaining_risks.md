@@ -2,105 +2,52 @@
 
 ## High
 
-### R-H1: Private `_parse_m3u8_formats` dependency
+### R-H1: Private HLS helper
 
-`firedm/video.py :: pre_process_hls/refresh_urls` calls
-`active.extractor.common.InfoExtractor._parse_m3u8_formats`. This is a
-private method on both `yt_dlp` and `youtube_dl`; both currently expose
-it but may rename or change its signature without notice.
+`firedm/video.py` still reaches the active extractor's
+`InfoExtractor._parse_m3u8_formats`. The hardcoded `youtube_dl` path is gone,
+but the method remains private upstream API.
 
-**Mitigation today:** adapter abstraction (`EXTRACTOR_SERVICE.active_module()`)
-means only one place needs to change, and the call is wrapped in a
-log-and-skip.
+Mitigation: the call is centralized behind the active extractor boundary and
+covered by ffmpeg/HLS command tests. Future work should replace this with a
+public yt-dlp helper or local minimal parser.
 
-**Future slice:** replace with yt_dlp's public HLS helper when one
-ships, or reimplement the minimum subset of the m3u8 parse we use.
+### R-H2: Legacy GUI exception swallowing
 
-### R-H2: `tkview.py` has 29 bare `except:` blocks
+`tkview.py` still contains broad legacy exception handling outside the P0 path.
 
-None are on the P0 YouTube path, but any of them can silently swallow
-future regressions in the GUI-driven flows (user clicks Download → nothing
-happens). The modernization of `tkview.py` is a separate, large slice.
-
-**Mitigation today:** the pipeline events let us correlate "user said
-nothing happened" with what the pipeline actually did, without relying on
-`tkview.py` reporting.
+Mitigation: pipeline events now expose extractor/playlist/download boundaries
+even when GUI reporting is weak. Future work should audit GUI exception paths.
 
 ## Medium
 
-### R-M1: `yt_dlp` upstream drift
+### R-M1: yt-dlp upstream drift
 
-`yt_dlp` releases monthly. Each release can:
+YouTube changes often. The verified family is `yt-dlp[default]>=2026.3.17`, but
+future releases can change info-dict shape or format availability.
 
-- change info-dict field semantics (why `abr=None` surfaced in the first
-  place);
-- drop formats YouTube stops serving;
-- rename private extractor symbols (e.g. `_parse_m3u8_formats`).
+Mitigation: run `scripts/run_regression_suite.py` and
+`scripts/repro_youtube_bug.py` before accepting extractor bumps.
 
-**Mitigation today:** `_coerce_number` normalizes all numeric fields;
-`_process_streams` wraps per-format construction; `run_regression_suite.py`
-catches the obvious breaks.
+### R-M2: External Deno and ffmpeg
 
-**Future:** add a nightly CI job that bumps `yt_dlp` to latest and runs
-the full suite + live repro.
+Deno and ffmpeg are not bundled by default. FireDM now discovers app-local
+paths, `PATH`, and Winget package directories, but a user without either tool
+still needs installation guidance.
 
-### R-M2: ffmpeg on PATH / external dependency
+Future decision: bundle one or both in Windows releases, after license and size
+review.
 
-Windows packaged builds still expect `ffmpeg.exe` on PATH or beside the
-exe. Users without it hit a `FFMPEG is missing` message during download
-(surfaced, but still a hard requirement).
+### R-M3: Legacy user extractor plugins
 
-**Mitigation today:** Settings dialog offers to download ffmpeg from
-a known mirror.
+User plugins that subclass `youtube_dl.InfoExtractor` remain fallback-only debt.
 
-**Future (deferred):** decide whether to bundle ffmpeg in the release
-zip, acknowledging license impact. Tracked in `docs/known-issues.md`.
+Mitigation: `[legacy]` extra remains available. Future work should support
+`yt_dlp.InfoExtractor` plugin registration or formally remove the feature.
 
-### R-M3: `load_user_extractors` only registers `youtube_dl` plugins
+## Deferred
 
-The helper still imports user-supplied `.py` files under
-`<settings>/extractors/` and subclasses `youtube_dl.InfoExtractor`. If we
-ever remove `youtube_dl`, those plugins silently stop loading.
-
-**Mitigation today:** fallback extractor still loads, plugins still work.
-
-**Future slice:** either deprecate the user-plugin feature with a
-migration notice, or add `yt_dlp.InfoExtractor` support.
-
-## Low
-
-### R-L1: Controller constructor starts threads at import time
-
-Integration tests (`tests/test_download_handoff.py`) patch
-`controller.Thread.start` to avoid this. A dedicated service object
-owning those threads would be cleaner but is out of P0 scope.
-
-### R-L2: Bare `except:` in `Stream.get_stream` / `Stream.quality`
-
-These are intentional today — they're guards on selection-loop filtering
-that must not cascade into GUI. Left as-is; noted here for awareness.
-
-### R-L3: Non-English title templates
-
-`Video.get_title` uses `ydl.prepare_filename` which can emit characters
-illegal on Windows filesystems; `validate_file_name` normalizes this but
-edge cases (e.g. trailing periods) may still surface. Not exercised by
-the automated suite.
-
-## Deferred (non-risk, tracking only)
-
-- `pycurl` transport boundary — kept; modernization is a separate slice
-  (see `docs/dependency-strategy.md`).
-- `config.py` global mutability — incremental cleanup only where touched.
-- `scripts/exe_build/*` legacy cx_Freeze — left in-repo for historical
-  reference but no longer supported.
-
-## How to retire risks
-
-Each risk above maps to a future commit or issue:
-
-- R-H1 → issue: "replace InfoExtractor._parse_m3u8_formats with public equivalent"
-- R-H2 → issue: "tkview.py bare-except audit"
-- R-M1 → CI nightly bump + regression run
-- R-M2 → release-process decision
-- R-M3 → plugin migration path
+- Split `controller.py` download/video orchestration further.
+- Add real-download resume/progress tests with a local HTTP server.
+- Validate Python 3.11 end-to-end.
+- Decide bundled ffmpeg/Deno release policy.

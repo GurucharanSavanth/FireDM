@@ -33,7 +33,7 @@ packaged bundle:
 | --- | --- | --- |
 | 1 | `firedm.exe --help` exits 0 | argparse wiring intact |
 | 2 | `firedm.exe --show-settings` exits 0 and prints the resolved settings folder | `app_paths.py` + `setting.py` + `config.py` all survive the freeze |
-| 3 | `firedm.exe --imports-only` exits 0 | every runtime dep (pycurl, yt_dlp, youtube_dl, Pillow, awesometkinter, pystray, plyer, packaging) is importable from the frozen bundle |
+| 3 | `firedm.exe --imports-only` exits 0 | runtime deps (`pycurl`, `yt_dlp`, `yt_dlp_ejs`, Pillow, awesometkinter, pystray, plyer, packaging) are importable from the frozen bundle; optional `youtube_dl` imports only if installed |
 | 4 | `FireDM-GUI.exe` launched for 4 seconds stays alive | Tk root initializes and stays running before we terminate the process |
 
 Results:
@@ -65,8 +65,8 @@ Exit code 0 = all checks pass. Non-zero = packaged build regressed.
 
 ## Known packaged-build limitations
 
-- `ffmpeg` is external. The bundle expects `ffmpeg.exe` on `PATH` or
-  beside the app. The settings dialog still offers to download it.
+- `ffmpeg` and Deno are external. The bundle checks app-local paths,
+  `PATH`, and Windows Winget package directories.
 - The packaged updater does not rewrite bundled Python packages in place
   (see `firedm/update.py` changes). It opens the release page.
 - GUI clipboard monitor, systray icon, and plyer notifications require

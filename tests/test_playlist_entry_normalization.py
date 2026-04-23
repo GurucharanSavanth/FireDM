@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from firedm.playlist_entry import normalize_entry
 
 

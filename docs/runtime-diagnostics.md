@@ -70,7 +70,7 @@ Select-String -Path .\log.txt -Pattern '\[pipeline\]'
 
 | Script | What it proves |
 | --- | --- |
-| `scripts/collect_runtime_diagnostics.py` | python, platform, extractor state, ffmpeg, active config |
+| `scripts/collect_runtime_diagnostics.py` | python, platform, extractor state, Deno/yt-dlp-ejs, ffmpeg, active config |
 | `scripts/verify_extractor_default.py` | yt_dlp is the runtime default even when the persisted config says otherwise |
 | `scripts/verify_playlist_entry_normalization.py` | 7 entry-shape cases all normalize correctly |
 | `scripts/verify_ffmpeg_pipeline.py` | ffmpeg discoverable + every command builder produces the expected shape |

@@ -2,4 +2,4 @@
 [stage extractor_ready] passed=True detail=active=yt_dlp, preferred=yt_dlp
 [stage create_video_playlist] passed=True returned 15 items
 [stage entry_url_normalization] passed=True inspected 5, malformed=0
-[stage process_first_entry] passed=True processed=True, streams=12
+[stage process_first_entry] passed=True processed=True, streams=49

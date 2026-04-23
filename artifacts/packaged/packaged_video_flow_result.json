@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-23T13:56:41",
+  "timestamp": "2026-04-23T14:45:25",
   "checks": {
     "help": {
       "exit_code": 0,
@@ -32,12 +32,12 @@
       "stdout_head": [
         "",
         ">> setting.cfg not found",
-        "imported module: plyer , in 0.0 sec",
-        "imported module: certifi , in 0.0 sec",
-        "imported module: youtube_dl 2021.12.17, in 0.5 sec",
-        "imported module: yt_dlp 2026.03.17, in 0.3 sec",
-        "imported module: pycurl , in 0.0 sec",
-        "imported module: PIL , in 0.0 sec"
+        "imported module: plyer 2.1.0, in 0.0 sec",
+        "imported module: certifi 2026.04.22, in 0.0 sec",
+        "imported module: yt_dlp 2026.03.17, in 0.4 sec",
+        "imported module: yt_dlp_ejs 0.8.0, in 0.0 sec",
+        "imported module: pycurl PycURL/\"7.45.7\" libcurl/8.15.0-DEV (OpenSSL/3.5.2) Schannel zlib/1.3.1 brotli/1.1.0 libssh2/1.11.1_DEV nghttp2/1.67.0, in 0.0 sec",
+        "imported module: PIL 12.2.0, in 0.0 sec"
       ],
       "stderr_head": [],
       "passed": true

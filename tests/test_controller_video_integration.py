@@ -95,8 +95,6 @@ def test_builder_records_skipped_bad_entries(tmp_download_folder):
 def test_controller_create_video_playlist_delegates_to_builder(tmp_download_folder):
     from firedm.controller import create_video_playlist
 
-    info = _single_info()
-
     def fake_get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
         # called twice: once for initial fetch, once to populate formats
         return info or _single_info() if info is not None else _single_info()

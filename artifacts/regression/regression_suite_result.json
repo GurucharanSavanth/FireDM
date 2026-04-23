@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-04-23T13:53:46",
+  "timestamp": "2026-04-23T14:36:23",
   "exit_code": 0,
-  "duration_seconds": 1.6,
+  "duration_seconds": 1.84,
   "targets": [
     "tests/test_extractor_service.py",
     "tests/test_extractor_default_selection.py",
@@ -15,9 +15,9 @@
     "tests/test_download_handoff.py",
     "tests/test_controller_video_integration.py"
   ],
-  "pytest_summary_line": "62 passed in 0.85s",
+  "pytest_summary_line": "63 passed in 0.86s",
   "stdout_tail": [
-    "..............................................................           [100%]",
-    "62 passed in 0.85s"
+    "...............................................................          [100%]",
+    "63 passed in 0.86s"
   ]
 }

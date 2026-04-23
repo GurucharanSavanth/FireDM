@@ -1,7 +1,7 @@
 """
     FireDM
 
-    multi-connections internet download manager, based on "LibCurl", and "youtube_dl".
+    multi-connections internet download manager, based on "LibCurl", "yt_dlp", and Tkinter.
 
     :copyright: (c) 2019-2021 by Mahmoud Elshahat.
     :license: GNU LGPLv3, see LICENSE for more details.
