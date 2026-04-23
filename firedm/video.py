@@ -26,6 +26,12 @@ from .extractor_adapter import (
     choose_extractor_name,
     load_extractor_module,
 )
+from .ffmpeg_commands import (
+    build_audio_convert_command,
+    build_hls_process_command,
+    build_merge_command,
+    dash_audio_extension_for,
+)
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
 from .utils import (log, validate_file_name, get_headers, format_bytes, run_command, delete_file, download, rename_file,
                     run_thread, import_file)
@@ -516,9 +522,8 @@ class Video(DownloadItem):
                 streams = [stream for stream in streams if stream.isfragmented == video_stream.isfragmented] or streams
 
                 # filter for compatible extension, faster muxing by ffmpeg,
-                # also to avoid errors when muxing m4a audio with webm video using "-c copy" flag, example ffmpeg error
-                # [webm@xx] Only VP8 or VP9 or AV1 video and Vorbis or Opus audio and WebVTT subtitles are supported for WebM.
-                ext = 'm4a' if video_stream.extension == 'mp4' else video_stream.extension
+                # also to avoid errors when muxing m4a audio with webm video using "-c copy" flag
+                ext = dash_audio_extension_for(video_stream.extension)
                 streams = [stream for stream in streams if stream.extension == ext] or streams
 
                 if quality == 'lowest':
@@ -720,17 +725,41 @@ def run_ffmpeg(cmd, d):
 def merge_video_audio(video, audio, output, d):
     """merge video file and audio file into output file, d is a reference for current DownloadItem object"""
     log('merging video and audio')
+    pipeline_event(
+        PipelineStage.FFMPEG_MERGE,
+        "start",
+        video=video,
+        audio=audio,
+        output=output,
+        ffmpeg=config.ffmpeg_actual_path,
+    )
 
-    cmd = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y -i "{video}" -i "{audio}"'
-    fastcmd = cmd + f' -c copy "{output}"'  # fast process, copy audio, format must match [mp4, m4a] and [webm, webm]
-    slowcmd = cmd + f' "{output}"'  # slow, mix different formats
+    pair = build_merge_command(
+        video_file=video,
+        audio_file=audio,
+        output_file=output,
+        ffmpeg_path=config.ffmpeg_actual_path,
+    )
 
-    error, output = run_ffmpeg(fastcmd, d)
+    error, out = run_ffmpeg(pair.fast, d)
+    attempted = ["fast"]
 
     if error:
-        error, output = run_ffmpeg(slowcmd, d)
+        pipeline_event(
+            PipelineStage.FFMPEG_MERGE,
+            "warn",
+            detail="fast stream-copy failed, retrying with transcode",
+            first_error=out,
+        )
+        error, out = run_ffmpeg(pair.slow, d)
+        attempted.append("slow")
 
-    return error, output
+    if error:
+        pipeline_event(PipelineStage.FFMPEG_MERGE, "fail", attempted=attempted, error=out)
+    else:
+        pipeline_event(PipelineStage.FFMPEG_MERGE, "ok", attempted=attempted)
+
+    return error, out
 
 
 def load_user_extractors(engine=youtube_dl):
@@ -1116,21 +1145,27 @@ def post_process_hls(d):
     local_audio_m3u8_file = os.path.join(d.temp_folder, 'local_audio.m3u8')
 
     def process_file(infp, outfp):
-        cmd = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y' \
-              f' -protocol_whitelist "file,http,https,tcp,tls,crypto"  ' \
-              f'-allowed_extensions ALL ' \
-              f'-i "{infp}"'
-        fastcmd = cmd + f' -c copy "file:{outfp}"'
-        slowcmd = cmd + f' "file:{outfp}"'
+        pair = build_hls_process_command(
+            m3u8_path=infp,
+            output_file=outfp,
+            ffmpeg_path=config.ffmpeg_actual_path,
+        )
 
-        error, output = run_ffmpeg(fastcmd, d)
+        error, output = run_ffmpeg(pair.fast, d)
 
         if error:
-            # retry without "-c copy" parameter, takes longer time
-            error, output = run_ffmpeg(slowcmd, d)
+            error, output = run_ffmpeg(pair.slow, d)
 
             if error:
                 log('post_process_hls()> ffmpeg failed:', output)
+                pipeline_event(
+                    PipelineStage.FFMPEG_MERGE,
+                    "fail",
+                    phase="hls_process",
+                    input=infp,
+                    output=outfp,
+                    error=output,
+                )
                 return False
 
     process_file(local_video_m3u8_file, d.temp_file)
@@ -1149,26 +1184,21 @@ def convert_audio(d):
     :param d: DownloadItem object
     :return: bool True for success or False when failed
     """
-    # famous formats: mp3, aac, wav, ogg
     infile = d.temp_file
     outfile = d.target_file
 
-    # look for compatible formats and use "copy" parameter for faster processing
-    cmd1 = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y -i "{infile}" -acodec copy "{outfile}"'
+    pair = build_audio_convert_command(
+        input_file=infile,
+        output_file=outfile,
+        ffmpeg_path=config.ffmpeg_actual_path,
+    )
 
-    # general command, consume time
-    cmd2 = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y -i "{infile}" "{outfile}"'
-
-    # run command1
-    error, _ = run_command(cmd1, verbose=True, hide_window=True, d=d)
-
-    if error:
-        error, _ = run_command(cmd2, verbose=True, hide_window=True, d=d)
+    error, _ = run_command(pair.fast, verbose=True, hide_window=True, d=d)
 
     if error:
-        return False
-    else:
-        return True
+        error, _ = run_command(pair.slow, verbose=True, hide_window=True, d=d)
+
+    return not error
 
 
 # parse m3u8 lines
