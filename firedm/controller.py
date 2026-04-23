@@ -35,6 +35,7 @@ from . import config
 from .config import Status, MediaType
 from .ffmpeg_service import locate_ffmpeg
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
+from .playlist_entry import normalize_entry
 from .brain import brain
 from . import video
 from .video import get_media_info, process_video
@@ -222,24 +223,56 @@ def create_video_playlist(url, ytdloptions=None, interrupt=False):
         if _type in ('playlist', 'multi_video') or 'entries' in info:
             log('processing playlist')
 
-            # videos info
-            pl_info = list(info.get('entries'))  # info.get('entries') is a generator
+            raw_entries = list(info.get('entries') or [])  # generator/list → list
 
-            # create initial playlist with un-processed video objects
-            for v_info in pl_info:
-                v_info['formats'] = []
+            skipped = 0
+            for idx, v_info in enumerate(raw_entries):
+                if not isinstance(v_info, dict):
+                    skipped += 1
+                    pipeline_event(
+                        PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
+                        "fail",
+                        detail="entry is not a dict",
+                        idx=idx,
+                    )
+                    continue
 
-                # get video's url
-                vid_url = v_info.get('webpage_url', None) or v_info.get('url', None) or v_info.get('id', None)
+                v_info.setdefault('formats', [])
 
-                # create video object
-                vid = ObservableVideo(vid_url, v_info)
+                normalized = normalize_entry(v_info)
+                if normalized is None:
+                    skipped += 1
+                    pipeline_event(
+                        PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
+                        "fail",
+                        detail="no identifier or url",
+                        idx=idx,
+                    )
+                    continue
 
-                # update info
+                pipeline_event(
+                    PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
+                    "ok",
+                    idx=idx,
+                    source=normalized.source_field,
+                    rebuilt=normalized.was_normalized,
+                    ie_key=normalized.ie_key,
+                )
+
+                try:
+                    vid = ObservableVideo(normalized.url, v_info)
+                except Exception as e:
+                    skipped += 1
+                    pipeline_exception(
+                        PipelineStage.PLAYLIST_ENTRY_NORMALIZE,
+                        e,
+                        idx=idx,
+                        url=normalized.url,
+                    )
+                    continue
+
                 vid.playlist_title = info.get('title', '')
                 vid.playlist_url = url
-
-                # add video to playlist
                 playlist.append(vid)
 
             pipeline_event(
@@ -247,6 +280,7 @@ def create_video_playlist(url, ytdloptions=None, interrupt=False):
                 "ok",
                 url=url,
                 entries=len(playlist),
+                skipped=skipped,
                 kind="playlist",
             )
         else:

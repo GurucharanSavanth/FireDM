@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-04-23T13:44:31",
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "overall_passed": true,
+  "cases": [
+    {
+      "name": "full_webpage_url",
+      "expected_url": "https://www.youtube.com/watch?v=abc1234567X",
+      "actual_url": "https://www.youtube.com/watch?v=abc1234567X",
+      "expected_normalized": false,
+      "actual_normalized": false,
+      "source_field": "webpage_url",
+      "passed": true
+    },
+    {
+      "name": "bare_id_with_ie_key",
+      "expected_url": "https://www.youtube.com/watch?v=def2345678Y",
+      "actual_url": "https://www.youtube.com/watch?v=def2345678Y",
+      "expected_normalized": true,
+      "actual_normalized": true,
+      "source_field": "id",
+      "passed": true
+    },
+    {
+      "name": "bare_id_no_ie_key",
+      "expected_url": "https://www.youtube.com/watch?v=C4C8JsgGrrY",
+      "actual_url": "https://www.youtube.com/watch?v=C4C8JsgGrrY",
+      "expected_normalized": true,
+      "actual_normalized": true,
+      "source_field": "id",
+      "passed": true
+    },
+    {
+      "name": "url_field_holds_bare_id",
+      "expected_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "actual_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "expected_normalized": true,
+      "actual_normalized": true,
+      "source_field": "url",
+      "passed": true
+    },
+    {
+      "name": "vimeo_numeric",
+      "expected_url": "https://vimeo.com/76979871",
+      "actual_url": "https://vimeo.com/76979871",
+      "expected_normalized": true,
+      "actual_normalized": true,
+      "source_field": "id",
+      "passed": true
+    },
+    {
+      "name": "empty_entry",
+      "expected_url": null,
+      "actual_url": null,
+      "expected_normalized": null,
+      "actual_normalized": null,
+      "source_field": null,
+      "passed": true
+    },
+    {
+      "name": "numeric_id_no_ie_key_unknown_source",
+      "expected_url": null,
+      "actual_url": null,
+      "expected_normalized": null,
+      "actual_normalized": null,
+      "source_field": null,
+      "passed": true
+    }
+  ]
+}
