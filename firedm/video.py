@@ -194,26 +194,29 @@ class Video(DownloadItem):
             self.select_stream(index=1)
 
     def get_title(self, outtmpl=None):
-        # get video title template
-        outtmpl = outtmpl or config.video_title_template or '%(title)s'
+        # Title rendering uses the extractor's own `prepare_filename` so
+        # user-facing templates like `%(title)s - %(uploader)s` keep working.
+        # When no extractor is loaded (headless tests, early startup) fall
+        # back to `simpletitle` instead of crashing.
+        if ytdl is None or not self.all_streams:
+            return self.simpletitle
 
-        # remove extension, it will be added later depend on stream type
+        outtmpl = outtmpl or config.video_title_template or '%(title)s'
         outtmpl = outtmpl.replace('.%(ext)s', '')
 
-        # get global youtube_dl options
         options = get_ytdl_options()
         options['outtmpl'] = outtmpl
 
-        ydl = ytdl.YoutubeDL(options)
-
-        # get video title template
-        if self.all_streams:
+        try:
+            ydl = ytdl.YoutubeDL(options)
             info = self.vid_info
             if self.audio_stream:
                 info.update(**self.audio_stream.stream_info)
             info.update(**self.selected_stream.stream_info)
-            title = ydl.prepare_filename(info)
-            return title
+            return ydl.prepare_filename(info)
+        except Exception as e:
+            pipeline_exception(PipelineStage.STREAM_SELECT, e, phase="title_template")
+            return self.simpletitle
 
     def _process_streams(self):
         raw_formats = self.vid_info.get('formats', []) or []
@@ -552,6 +555,28 @@ class Video(DownloadItem):
         self.setup()
 
 
+def _coerce_number(value, default=0):
+    """Coerce extractor-reported numeric fields to `default` on None/blank.
+
+    yt_dlp and youtube_dl both emit dict entries with explicit `None` values
+    for fields they could not detect (e.g. `abr`, `tbr`, `height` on audio-
+    only or storyboard formats). `dict.get(key, default)` returns `None`
+    rather than `default` when the key is present with a `None` value, so
+    downstream arithmetic like `abr * 1024` blows up.
+
+    This helper normalizes to a numeric default and survives unexpected
+    types without raising.
+    """
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return type(default)(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class Stream:
     def __init__(self, stream_info):
         # fetch data from youtube-dl stream_info dictionary
@@ -560,13 +585,13 @@ class Stream:
         self.url = stream_info.get('url', None)
         self.player_url = stream_info.get('player_url', None)
         self.extension = stream_info.get('ext', None)
-        self.width = stream_info.get('width', 0)
-        self.height = stream_info.get('height', 0)
+        self.width = _coerce_number(stream_info.get('width'), 0)
+        self.height = _coerce_number(stream_info.get('height'), 0)
         self.fps = stream_info.get('fps', None)  # frame per second
         self.format_note = stream_info.get('format_note', '')
         self.acodec = stream_info.get('acodec', None)
-        self.abr = stream_info.get('abr', 0)
-        self.tbr = stream_info.get('tbr', 0)  # for videos == BANDWIDTH/1000
+        self.abr = _coerce_number(stream_info.get('abr'), 0)
+        self.tbr = _coerce_number(stream_info.get('tbr'), 0)  # for videos == BANDWIDTH/1000
         self.size = stream_info.get('filesize', None)
         # self.quality = stream_info.get('quality', None)
         self.vcodec = stream_info.get('vcodec', None)
@@ -589,7 +614,7 @@ class Stream:
         self.protocol = stream_info.get('protocol', '')
 
         # calculate some values
-        self.rawbitrate = stream_info.get('abr', 0) * 1024
+        self.rawbitrate = self.abr * 1024
         self._mediatype = None
         self.resolution = f'{self.width}x{self.height}' if (self.width and self.height) else ''
 

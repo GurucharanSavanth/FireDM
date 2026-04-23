@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-04-23T13:41:34",
+  "entry_count": 2,
+  "entries": [
+    {
+      "title": "Entry 1",
+      "url": "https://www.youtube.com/watch?v=abc",
+      "streams_before_process": 0
+    },
+    {
+      "title": "Entry 2",
+      "url": "https://www.youtube.com/watch?v=def",
+      "streams_before_process": 0
+    }
+  ],
+  "first_entry_streams_after_process": 11,
+  "calls": 2,
+  "passed": true
+}

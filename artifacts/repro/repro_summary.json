@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-04-23T12:35:43",
+  "timestamp": "2026-04-23T13:41:53",
   "targets": {
-    "playlist": {
-      "url": "https://www.youtube.com/playlist?list=PLt1SIbA8guusxiHz9bveV-UHs_biWFegU",
+    "single_video": {
+      "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
       "overall_passed": true,
       "harness_error": null,
       "stages": [
@@ -12,37 +12,50 @@
           "detail": "active=yt_dlp, preferred=yt_dlp",
           "data": {
             "active_module": "yt_dlp",
-            "configured": "yt_dlp"
+            "configured": "yt_dlp",
+            "yt_dlp_version": "2026.03.17",
+            "youtube_dl_version": null
+          },
+          "error": null
+        },
+        {
+          "name": "default_is_primary",
+          "passed": true,
+          "detail": "active=yt_dlp, preferred=yt_dlp",
+          "data": {
+            "active_is_primary": true
           },
           "error": null
         },
         {
           "name": "create_video_playlist",
           "passed": true,
-          "detail": "returned 15 items",
+          "detail": "returned 1 items",
           "data": {
-            "count": 15
+            "count": 1
           },
           "error": null
         },
         {
-          "name": "entry_url_normalization",
+          "name": "stream_menu",
           "passed": true,
-          "detail": "inspected 5, malformed=0",
+          "detail": "17 streams, title='Me at the zoo'",
           "data": {
-            "inspected": 5,
-            "malformed": []
+            "streams": 17,
+            "menu_entries": 18,
+            "title": "Me at the zoo"
           },
           "error": null
         },
         {
-          "name": "process_first_entry",
+          "name": "selected_stream_url",
           "passed": true,
-          "detail": "processed=True, streams=12",
+          "detail": "selected=    mp4 - 240p - 320x240 - 218.53 KB - id:395 - 15 fps, has_url=True",
           "data": {
-            "title": "What is Apache Kafka\uff1f Brief introduction",
-            "streams": 12,
-            "processed": true
+            "selected_name": "    mp4 - 240p - 320x240 - 218.53 KB - id:395 - 15 fps",
+            "mediatype": "dash",
+            "extension": "mp4",
+            "has_eff_url": true
           },
           "error": null
         }
