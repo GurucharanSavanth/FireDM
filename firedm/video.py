@@ -19,7 +19,13 @@ import subprocess
 
 from . import config
 from .downloaditem import DownloadItem, Segment
-from .extractor_adapter import choose_extractor_name, load_extractor_module
+from .extractor_adapter import (
+    FALLBACK_EXTRACTOR,
+    PRIMARY_EXTRACTOR,
+    SERVICE as EXTRACTOR_SERVICE,
+    choose_extractor_name,
+    load_extractor_module,
+)
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
 from .utils import (log, validate_file_name, get_headers, format_bytes, run_command, delete_file, download, rename_file,
                     run_thread, import_file)
@@ -62,10 +68,18 @@ def get_ytdl_options():
         proxy = config.proxy.replace('socks5h', 'socks5')
         ydl_opts['proxy'] = proxy
 
-    # set Referer website
-    if config.referer_url:
-        # this is not accessible via youtube-dl options, changing standard headers is the only way
-        ytdl.utils.std_headers['Referer'] = config.referer_url
+    # set Referer website — apply to whichever extractor is active. `std_headers`
+    # is a module-level mapping in both yt_dlp and youtube_dl; changing it is
+    # the only way to pass Referer since it is not exposed as a ydl option.
+    if config.referer_url and ytdl is not None:
+        try:
+            ytdl.utils.std_headers['Referer'] = config.referer_url
+        except Exception as e:
+            pipeline_exception(
+                PipelineStage.EXTRACTOR_SELECT,
+                e,
+                phase="referer_header",
+            )
 
     # verify / bypass server's ssl certificate
     ydl_opts['nocheckcertificate'] = config.ignore_ssl_cert
@@ -696,6 +710,10 @@ def merge_video_audio(video, audio, output, d):
 
 def load_user_extractors(engine=youtube_dl):
     # load user's video extractors
+    if not config.sett_folder:
+        # settings folder hasn't been resolved yet (headless tool / early
+        # startup). Nothing to load.
+        return
     extractors_folder = os.path.join(config.sett_folder, 'extractors')
     if not os.path.isdir(extractors_folder):
         return
@@ -728,15 +746,25 @@ def load_user_extractors(engine=youtube_dl):
 
 
 def load_extractor_engines(reload=False):
-    """import extractor engines
-    should call this from a thread because sometimes youtube_dl takes around 20 seconds to get imported and impact
-    app startup time
+    """Import extractor engines and record them with the adapter service.
+
+    The primary (`yt_dlp`) is always preferred as the runtime extractor.
+    The fallback (`youtube_dl`) is loaded best-effort so legacy user
+    extractors keep working, but it is never chosen as the active extractor
+    when the primary is available.
+
+    Imports run in daemon threads so GUI startup stays snappy, but the
+    default-selection decision is deterministic: `ExtractorService` applies
+    `choose_extractor_name` every time an engine loads and promotes the
+    primary as soon as it is present.
 
     Args:
-        reload (bool): if true it will reload modules instead of importing, needed after modules update
+        reload (bool): if True, reload modules in place (used by update flows).
     """
 
     def _load_user_extractors_safely(engine, engine_name):
+        if engine is None:
+            return
         try:
             load_user_extractors(engine=engine)
         except Exception as e:
@@ -748,111 +776,115 @@ def load_extractor_engines(reload=False):
             )
             log(f'load_user_extractors({engine_name}) error:', e, log_level=2)
 
-    # youtube-dl ----------------------------------------------------------------------------------------------------
-    def import_youtube_dl():
-        global youtube_dl
-        pipeline_event(PipelineStage.EXTRACTOR_LOAD, "start", engine="youtube_dl")
+    def _import_engine(name, existing_module, version_attr):
+        pipeline_event(PipelineStage.EXTRACTOR_LOAD, "start", engine=name)
         start = time.time()
-
         try:
             extractor = load_extractor_module(
-                'youtube_dl',
+                name,
                 reload_existing=reload,
-                existing_module=youtube_dl,
+                existing_module=existing_module,
             )
         except Exception as e:
-            pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine="youtube_dl")
-            log('youtube_dl import failed:', e, log_level=2)
-            return
-        youtube_dl = extractor.module
+            pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine=name)
+            log(f'{name} import failed:', e, log_level=2)
+            return None
 
-        config.youtube_dl_version = extractor.version
-
-        # calculate loading time
+        setattr(config, version_attr, extractor.version)
         load_time = time.time() - start
-        log(f'youtube_dl version: {config.youtube_dl_version}, load_time= {int(load_time)} seconds', log_level=2)
+        log(f'{name} version: {extractor.version}, load_time= {int(load_time)} seconds', log_level=2)
         pipeline_event(
             PipelineStage.EXTRACTOR_LOAD,
             "ok",
-            engine="youtube_dl",
-            version=config.youtube_dl_version,
+            engine=name,
+            version=extractor.version,
             load_seconds=round(load_time, 2),
         )
+        return extractor
 
-        # get a random user agent and update headers
+    # primary -------------------------------------------------------------
+    def import_primary():
+        global yt_dlp
+        extractor = _import_engine('yt_dlp', yt_dlp, 'yt_dlp_version')
+        if extractor is None:
+            return
+        yt_dlp = extractor.module
+        EXTRACTOR_SERVICE.record_load(extractor)
+        _sync_module_globals()
+        _load_user_extractors_safely(yt_dlp, 'yt_dlp')
+
+    # fallback ------------------------------------------------------------
+    def import_fallback():
+        global youtube_dl
+        extractor = _import_engine('youtube_dl', youtube_dl, 'youtube_dl_version')
+        if extractor is None:
+            return
+        youtube_dl = extractor.module
+        EXTRACTOR_SERVICE.record_load(extractor)
+        _sync_module_globals()
+
+        # legacy user-agent path kept for non-custom configurations
         if not config.custom_user_agent:
             try:
                 config.http_headers['User-Agent'] = youtube_dl.utils.random_user_agent()
             except Exception as e:
-                pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine="youtube_dl", phase="user_agent")
+                pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine='youtube_dl', phase='user_agent')
 
-        active = choose_extractor_name(
-            config.active_video_extractor,
-            [name for name, module in (('yt_dlp', yt_dlp), ('youtube_dl', youtube_dl)) if module],
-        )
-        if active:
-            set_default_extractor(active)
+        _load_user_extractors_safely(youtube_dl, 'youtube_dl')
 
-        _load_user_extractors_safely(youtube_dl, "youtube_dl")
+    run_thread(import_fallback, daemon=True)
+    run_thread(import_primary, daemon=True)
 
-    # yt_dlp ----------------------------------------------------------------------------------------------------
-    def import_yt_dlp():
-        global yt_dlp
-        pipeline_event(PipelineStage.EXTRACTOR_LOAD, "start", engine="yt_dlp")
 
-        start = time.time()
+def _sync_module_globals():
+    """Mirror `ExtractorService` state onto the legacy module globals.
 
-        try:
-            extractor = load_extractor_module(
-                'yt_dlp',
-                reload_existing=reload,
-                existing_module=yt_dlp,
-            )
-        except Exception as e:
-            pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine="yt_dlp")
-            log('yt_dlp import failed:', e, log_level=2)
-            return
-        yt_dlp = extractor.module
-
-        config.yt_dlp_version = extractor.version
-
-        # calculate loading time
-        load_time = time.time() - start
-        log(f'yt_dlp version: {config.yt_dlp_version}, load_time= {int(load_time)} seconds', log_level=2)
+    Many call-sites (and tests) still read `video.ytdl`. Update that global
+    after every load so the legacy accessor always points at the primary as
+    soon as it is available.
+    """
+    global ytdl
+    _, active_module = EXTRACTOR_SERVICE.current()
+    if active_module is not None:
+        ytdl = active_module
         pipeline_event(
-            PipelineStage.EXTRACTOR_LOAD,
+            PipelineStage.EXTRACTOR_SELECT,
             "ok",
-            engine="yt_dlp",
-            version=config.yt_dlp_version,
-            load_seconds=round(load_time, 2),
+            active=EXTRACTOR_SERVICE.active_name(),
+            module=getattr(ytdl, "__name__", None),
         )
-
-        active = choose_extractor_name(
-            config.active_video_extractor,
-            [name for name, module in (('yt_dlp', yt_dlp), ('youtube_dl', youtube_dl)) if module],
-        )
-        if active:
-            set_default_extractor(active)
-
-        _load_user_extractors_safely(yt_dlp, "yt_dlp")
-
-    run_thread(import_youtube_dl, daemon=True)
-    run_thread(import_yt_dlp, daemon=True)
 
 
 def set_default_extractor(extractor=None):
-    """set default extractor engine, e.g. select between youtube-dl and yt_dlp"""
-    extractor = extractor or config.active_video_extractor
+    """Select the active extractor engine via the adapter service.
 
-    global ytdl
-    ytdl = youtube_dl if extractor == 'youtube_dl' else yt_dlp
-    log('set default extractor engine to:', extractor, ytdl, log_level=2)
-    pipeline_event(
-        PipelineStage.EXTRACTOR_SELECT,
-        "ok" if ytdl is not None else "fail",
-        active=extractor,
-        module=getattr(ytdl, "__name__", None),
-    )
+    The argument is a user intent (typically `config.active_video_extractor`).
+    The adapter still enforces the primary-first policy; attempts to pin the
+    deprecated fallback while the primary is available are allowed but
+    logged so diagnostics can detect it.
+    """
+    preferred = extractor or config.active_video_extractor
+    EXTRACTOR_SERVICE.set_configured(preferred)
+    _sync_module_globals()
+
+    chosen = EXTRACTOR_SERVICE.active_name()
+    config.active_video_extractor = chosen or preferred or PRIMARY_EXTRACTOR
+    log('set default extractor engine to:', chosen, ytdl, log_level=2)
+    if chosen is None:
+        pipeline_event(
+            PipelineStage.EXTRACTOR_SELECT,
+            "fail",
+            detail="no extractor module loaded",
+            requested=preferred,
+        )
+    elif preferred and chosen != preferred:
+        pipeline_event(
+            PipelineStage.EXTRACTOR_SELECT,
+            "warn",
+            detail="user-requested extractor overridden by primary-first policy",
+            requested=preferred,
+            chosen=chosen,
+        )
 
 
 def set_interrupt_switch(ydl):
@@ -903,8 +935,14 @@ def pre_process_hls(d):
     # X-STREAM: must have BANDWIDTH, X-MEDIA: must have TYPE, GROUP-ID, NAME=="language name"
     # tbr for videos calculated by youtube-dl == BANDWIDTH/1000
     def refresh_urls(m3u8_doc, m3u8_url):
-        # using youtube-dl internal function
-        extract_m3u8_formats = youtube_dl.extractor.common.InfoExtractor._parse_m3u8_formats
+        # Use the active extractor's HLS parser (yt_dlp primary / youtube_dl
+        # fallback). Hardcoding `youtube_dl` here used to break HLS flows
+        # when the fallback failed to import.
+        active = EXTRACTOR_SERVICE.active_module() or ytdl
+        if active is None:
+            log('refresh_urls()> no extractor available; skipping m3u8 refresh')
+            return
+        extract_m3u8_formats = active.extractor.common.InfoExtractor._parse_m3u8_formats
 
         # get formats list [{'format_id': 'hls-160000mp4a.40.2-spa', 'url': 'http://ex.com/exp=15...'}, ...]
         # what we need is format_id and url
@@ -1506,15 +1544,15 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
 
     url = url or info.get('url') or info.get('webpage_url')
 
-    # we import youtube-dl in separate thread to minimize startup time, will wait in loop until it gets imported
-    if ytdl is None:
+    # extractor is loaded in background threads for GUI startup speed — wait
+    # on the adapter service for a deterministic ready signal instead of a
+    # raw module-global spin loop.
+    if EXTRACTOR_SERVICE.active_module() is None:
         log(f'loading {config.active_video_extractor} ...')
         pipeline_event(PipelineStage.EXTRACTOR_READY, "start", configured=config.active_video_extractor)
-        waited = 0
-        while not ytdl and waited < 45:
-            time.sleep(1)  # wait until module gets imported
-            waited += 1
-        if ytdl is None:
+        ready = EXTRACTOR_SERVICE.wait_until_ready(timeout=45.0)
+        _sync_module_globals()
+        if not ready:
             pipeline_event(
                 PipelineStage.EXTRACTOR_READY,
                 "fail",
@@ -1525,8 +1563,8 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
         pipeline_event(
             PipelineStage.EXTRACTOR_READY,
             "ok",
-            active=getattr(ytdl, "__name__", "?"),
-            waited_seconds=waited,
+            active=EXTRACTOR_SERVICE.active_name(),
+            is_primary=EXTRACTOR_SERVICE.is_primary_active(),
         )
 
     # get global youtube_dl options
