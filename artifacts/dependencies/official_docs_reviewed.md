@@ -5,8 +5,10 @@
 - yt-dlp releases: 2026 release notes and YouTube extractor churn. https://github.com/yt-dlp/yt-dlp/releases
 - Deno install docs: Windows support, Winget install, `deno --version` verification. https://docs.deno.com/runtime/getting_started/installation/
 - Python Packaging User Guide: `pyproject.toml`, `[build-system]`, `[project]`, `[tool]`. https://packaging.python.org/en/latest/specifications/pyproject-toml/
+- Python Packaging User Guide: `requires-python` constrains install compatibility, while classifiers only advertise searchable support. https://packaging.python.org/en/latest/guides/writing-pyproject-toml/
 - Setuptools pyproject docs: setuptools-specific config and package discovery. https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
 - PyInstaller spec docs: executable spec files, data files, binaries, multi-program bundles. https://pyinstaller.org/en/stable/spec-files.html
+- PyInstaller hooks docs: data/binary collection helpers and tkinter hook behavior. https://pyinstaller.org/en/latest/hooks.html
 - pytest docs: Windows support, test discovery, assert introspection. https://docs.pytest.org/
 - Ruff formatter docs: Black-compatible formatter and unified linter/formatter positioning. https://docs.astral.sh/ruff/formatter/
 - mypy docs: gradual typing and static checking. https://mypy.readthedocs.io/
@@ -17,3 +19,9 @@
 - Plyer docs: platform facade role. https://plyer.readthedocs.io/
 - certifi PyPI: Mozilla CA bundle role. https://pypi.org/project/certifi/
 - distro docs: Linux-only platform detection. https://distro.readthedocs.io/
+- actions/checkout README/releases: current `v6` action and runner notes. https://github.com/actions/checkout
+- actions/setup-python README/releases: current `v6` action, pip cache, and Node 24 runner notes. https://github.com/actions/setup-python
+- actions/upload-artifact README: current artifact upload usage and deprecated old artifact action versions. https://github.com/actions/upload-artifact
+- PyPI Trusted Publisher docs: OIDC publishing with `pypa/gh-action-pypi-publish@release/v1`. https://docs.pypi.org/trusted-publishers/using-a-publisher/
+- GitHub CLI release docs: `gh release create` behavior for draft releases and assets. https://cli.github.com/manual/gh_release_create
+- actions/create-release repository: archived status for the old release action. https://github.com/actions/create-release

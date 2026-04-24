@@ -6,7 +6,8 @@ FireDM now uses modern PEP 517/518/621 packaging through `pyproject.toml` with s
 
 ## Important Metadata
 
-- Python support: `>=3.10,<3.13`
+- Python support: `>=3.10,<3.11`. Python 3.11 and 3.12 are validation
+  targets, not advertised supported runtimes yet.
 - Runtime extractor: `yt-dlp[default]>=2026.3.17`
 - Legacy extractor: optional extra `[legacy]`
 - Dev/test/build extras: `[dev]`, `[test]`, `[build]`, `[type]`

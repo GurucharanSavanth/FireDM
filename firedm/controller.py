@@ -754,9 +754,8 @@ class Controller:
 
                 if not silent and config.operating_system == 'Windows':
                     res = self.get_user_response(popup_id=2)
-                    if res == 'Download':
-                        # download ffmpeg from github
-                        self._download_ffmpeg()
+                    if res == 'Open Help':
+                        self.open_ffmpeg_help()
                 else:
                     log('FFMPEG is missing', start='', showpopup=showpopup)
 
@@ -992,35 +991,10 @@ class Controller:
                 d.shutdown_pc = False
                 self.shutdown_pc()
 
-    def _download_ffmpeg(self, destination=config.sett_folder):
-        """download ffmpeg.exe for windows os
-
-        Args:
-            destination (str): download folder
-
-        """
-
-        # set download folder
-        config.ffmpeg_download_folder = destination
-
-        # first check windows 32 or 64
-        import platform
-        # ends with 86 for 32 bit and 64 for 64 bit i.e. Win7-64: AMD64 and Vista-32: x86
-        if platform.machine().endswith('64'):
-            # 64 bit link
-            url = 'https://github.com/firedm/FireDM/releases/download/extra/ffmpeg_64bit.exe'
-        else:
-            # 32 bit link
-            url = 'https://github.com/firedm/FireDM/releases/download/extra/ffmpeg_32bit.exe'
-
-        log('downloading: ', url)
-
-        # create a download object, will save ffmpeg in setting folder
-        d = ObservableDownloadItem(url=url, folder=config.ffmpeg_download_folder)
-        d.update(url)
-        d.name = 'ffmpeg.exe'
-
-        self.download(d, silent=True)
+    def open_ffmpeg_help(self):
+        """Open ffmpeg install guidance instead of downloading stale repo assets."""
+        log('opening ffmpeg install help:', config.FFMPEG_DOWNLOAD_HELP_URL)
+        open_webpage(config.FFMPEG_DOWNLOAD_HELP_URL)
 
     def autodownload(self, url, **kwargs):
         """download file automatically without user intervention
@@ -1159,7 +1133,7 @@ class Controller:
                 log('getting FireDM changelog ....')
 
                 # download change log file
-                url = 'https://github.com/firedm/FireDM/raw/master/ChangeLog.txt'
+                url = f'{config.APP_URL}/raw/main/ChangeLog.txt'
                 changelog = download(url, verbose=False)
 
                 # verify server didn't send html page

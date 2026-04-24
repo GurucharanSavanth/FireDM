@@ -6,7 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "FireDM"
 description = "Multi-connection download manager with Tkinter GUI, CLI mode, pycurl transport, and ffmpeg post-processing."
 readme = "README.md"
-requires-python = ">=3.10,<3.13"
+# Python 3.10 is the only verified runtime for the revived Windows baseline.
+# Re-open this range only after 3.11/3.12 pass tests, import smoke, and
+# Windows packaging validation.
+requires-python = ">=3.10,<3.11"
 dynamic = ["version"]
 # PEP 639: license is a string SPDX expression (setuptools 77+ supports this).
 license = "LGPL-3.0-or-later"
@@ -24,8 +27,6 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
   "Topic :: Internet",
   "Topic :: Multimedia :: Video",
   "Topic :: Utilities",

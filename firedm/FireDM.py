@@ -36,9 +36,18 @@ from . import config, setting
 from .cmdview import CmdView
 from .controller import Controller
 from .setting import load_setting
-from .tkview import MainWindow
 from .utils import format_bytes, parse_bytes, parse_urls
 from .version import __version__
+
+
+def open_config_editor(executable: str, config_fp: str) -> int:
+    """Open the config file without routing editor text through a shell."""
+    try:
+        result = subprocess.run([executable, config_fp], check=False, shell=False)
+    except OSError as exc:
+        print(f"failed to launch editor {executable!r}: {exc}", file=sys.stderr)
+        return 1
+    return result.returncode
 
 
 def pars_args(arguments):
@@ -50,7 +59,7 @@ def pars_args(arguments):
     description = """FireDM is an open source Download Manager with multi-connections, high speed 
         engine, it can download general files and video files from youtube and tons of other streaming websites. 
         Developed in Python, based on "LibCurl", "yt_dlp", and "Tkinter".
-        Source: https://github.com/firedm/FireDM """
+        Source: https://github.com/GurucharanSavanth/FireDM """
 
     def iterable(txt):
         # process iterable in arguments, e.g. tuple or list,
@@ -74,7 +83,7 @@ def pars_args(arguments):
         description=description,
         epilog='copyright: (c) 2019-2021 FireDM. license: GNU LGPLv3, see LICENSE file for more details. '
                'Author: Mahmoud Elshahat, '
-               'Isuues: https://github.com/firedm/FireDM/issues',
+               'Issues: https://github.com/GurucharanSavanth/FireDM/issues',
         usage='\n'
               '%(prog)s [OPTIONS] URL1 URL2 URL3 \n'
               'example: %(prog)s "https://somesite.com/somevideo" "https://somesite.com/anothervideo"\n'
@@ -425,9 +434,7 @@ def main(argv=sys.argv):
 
     if sett.get('edit_config'):
         executable = sett.get('edit_config')
-        cmd = f'{executable} {config_fp}'
-        subprocess.run(cmd, shell=True)
-        sys.exit(0)
+        sys.exit(open_config_editor(executable, config_fp))
 
     if sett.get('imports_only'):
         import_diagnostics()
@@ -459,6 +466,8 @@ def main(argv=sys.argv):
     # if running application without arguments will start the gui, otherwise will run application in cmdline
     if guimode:
         # GUI
+        from .tkview import MainWindow
+
         controller = Controller(view_class=MainWindow, custom_settings=sett)
         controller.run()
     else:

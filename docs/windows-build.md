@@ -5,7 +5,8 @@ Windows distribution now targets **PyInstaller**. The legacy cx_Freeze scripts r
 
 Reasons:
 - PyInstaller is easier to reproduce on current Windows Python versions
-- it handles Tkinter well
+- it supports a manual Tcl/Tk collection workaround when PyInstaller's Tk hook
+  mis-detects this Windows Python layout
 - it supports explicit hidden-import collection for dynamic extractor imports
 - it avoids the old frozen-layout assumptions baked into the cx_Freeze updater flow
 
@@ -18,6 +19,8 @@ Reasons:
 ```powershell
 .\scripts\windows-build.ps1
 ```
+
+The script installs the build extra with `pip install --no-build-isolation -e ".[build]"` and uses `python -m build --no-isolation` for the local package build, so the Windows package path uses the already-bootstrapped repo environment instead of creating temporary build environments that may need network access.
 
 Optional GUI smoke in the same script:
 
@@ -40,7 +43,28 @@ Expected executables:
 
 ```powershell
 .\dist\FireDM\firedm.exe --help
+.\dist\FireDM\firedm.exe --imports-only
 Start-Process .\dist\FireDM\FireDM-GUI.exe
 ```
 
+The build script also verifies these packaged Tk assets:
+
+```text
+dist\FireDM\_internal\tkinter\__init__.py
+dist\FireDM\_internal\_tcl_data\init.tcl
+dist\FireDM\_internal\_tk_data\tk.tcl
+```
+
+PyInstaller can still log a tkinter/Tcl warning in this environment. That
+warning is not ignored blindly: keep `scripts/firedm-win.spec` collecting the
+stdlib tkinter package, Tcl/Tk data folders, `_tkinter.pyd`, `tcl86t.dll`, and
+`tk86t.dll`; remove the workaround only after the warning disappears and the
+packaged import smoke still passes.
+
 Packaged Windows builds are **release-replace**, not self-patching. The in-app updater opens the release page instead of rewriting packaged Python files in place.
+
+## CI release path
+
+- `.github/workflows/windows-smoke.yml` runs tests, scoped Ruff, `python -m build`, PyInstaller, source smoke, packaged CLI smoke, and uploads the `dist\FireDM` artifact.
+- `.github/workflows/draft-release.yml` builds the same Windows package, creates `dist\FireDM-Windows.zip`, uploads it as an artifact, and creates a draft GitHub release with `gh release create`.
+- `.github/workflows/pypi-release.yml` builds wheel/sdist from `pyproject.toml`, checks metadata with Twine, and publishes through PyPI trusted publishing when the PyPI project is configured for this repository.

@@ -25,17 +25,25 @@ on:
       - ".github/workflows/windows-smoke.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
 
       - name: Install dependencies
         run: |
@@ -45,14 +53,24 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-      - name: Lint
-        run: python -m ruff check firedm/FireDM.py firedm/app_paths.py firedm/extractor_adapter.py firedm/ffmpeg_service.py firedm/setting.py firedm/update.py tests
+      - name: Lint maintained seam
+        run: >
+          python -m ruff check
+          firedm/FireDM.py
+          firedm/app_paths.py
+          firedm/extractor_adapter.py
+          firedm/ffmpeg_service.py
+          firedm/tool_discovery.py
+          firedm/setting.py
+          firedm/update.py
+          tests
 
       - name: Build Python package
         run: python -m build
 
       - name: Build Windows distribution
-        run: python -m PyInstaller --clean --noconfirm scripts/firedm-win.spec
+        shell: pwsh
+        run: .\scripts\windows-build.ps1 -PythonExe (Get-Command python).Source -SkipTests
 
       - name: Smoke source and packaged entrypoints
         shell: pwsh
@@ -60,3 +78,10 @@ jobs:
           python -m firedm --help
           python firedm.py --imports-only
           .\dist\FireDM\firedm.exe --help
+
+      - name: Upload Windows distribution
+        uses: actions/upload-artifact@v7
+        with:
+          name: FireDM-Windows
+          path: dist/FireDM/**
+          if-no-files-found: error

@@ -10,12 +10,10 @@
 !contributors.md
 !BASELINE_AUDIT.md
 !AGENTS.md
-!CLAUDE.md
 !LICENSE
 !firedm.py
 !README.md
 !requirements.txt
-!.claude
 !setup.py
 !pyproject.toml
 !todo.md

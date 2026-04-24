@@ -9,6 +9,18 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @()
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code $LASTEXITCODE`: $FilePath $($Arguments -join ' ')"
+    }
+}
+
 function Resolve-Python {
     param([string]$Requested)
 
@@ -37,11 +49,11 @@ function Resolve-Python {
 $PythonExe = Resolve-Python -Requested $PythonExe
 Write-Host "Using Python:" $PythonExe
 
-& $PythonExe -m pip install -e ".[build]"
+Invoke-Checked $PythonExe @("-m", "pip", "install", "--no-build-isolation", "-e", ".[build]")
 
 if (-not $SkipTests) {
-    & $PythonExe -m pytest -q
-    & $PythonExe -m build
+    Invoke-Checked $PythonExe @("-m", "pytest", "-q")
+    Invoke-Checked $PythonExe @("-m", "build", "--no-isolation")
 }
 
 $DistFireDM = Join-Path $RepoRoot "dist\FireDM"
@@ -60,8 +72,21 @@ Get-Process | Where-Object {
 Remove-Item ".\build" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item ".\dist\FireDM" -Recurse -Force -ErrorAction SilentlyContinue
 
-& $PythonExe -m PyInstaller --clean --noconfirm ".\scripts\firedm-win.spec"
-& ".\dist\FireDM\firedm.exe" --help | Out-Null
+Invoke-Checked $PythonExe @("-m", "PyInstaller", "--clean", "--noconfirm", ".\scripts\firedm-win.spec")
+Invoke-Checked ".\dist\FireDM\firedm.exe" @("--help")
+Invoke-Checked ".\dist\FireDM\firedm.exe" @("--imports-only")
+
+$RequiredTkAssets = @(
+    ".\dist\FireDM\_internal\tkinter\__init__.py",
+    ".\dist\FireDM\_internal\_tcl_data\init.tcl",
+    ".\dist\FireDM\_internal\_tk_data\tk.tcl"
+)
+
+foreach ($Asset in $RequiredTkAssets) {
+    if (-not (Test-Path $Asset)) {
+        throw "Missing packaged Tk asset: $Asset. Keep the manual Tcl/Tk collection in scripts\firedm-win.spec."
+    }
+}
 
 if ($SmokeGui) {
     $process = Start-Process -FilePath ".\dist\FireDM\FireDM-GUI.exe" -PassThru

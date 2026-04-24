@@ -1,6 +1,7 @@
 import subprocess
 from pathlib import Path
 
+from firedm import config, controller
 from firedm.ffmpeg_service import locate_ffmpeg, parse_ffmpeg_version, resolve_ffmpeg_path
 
 
@@ -72,3 +73,13 @@ def test_locate_ffmpeg_reads_version(tmp_path):
     assert info.found is True
     assert info.path == str(ffmpeg_path.resolve())
     assert info.version == "7.0"
+
+
+def test_controller_opens_ffmpeg_help_url(monkeypatch):
+    opened = []
+
+    monkeypatch.setattr(controller, "open_webpage", opened.append)
+
+    controller.Controller.open_ffmpeg_help(object())
+
+    assert opened == [config.FFMPEG_DOWNLOAD_HELP_URL]

@@ -15,16 +15,14 @@ import os
 import re
 import shutil
 import sys
-import tarfile
 import time
 import webbrowser
-import zipfile
 from threading import Thread
 
 from packaging.version import parse as parse_version
 
 from . import config
-from .utils import delete_folder, download, log, run_command
+from .utils import delete_folder, download, log, run_command, safe_extract_tar, safe_extract_zip
 
 
 def self_update_supported(*, frozen=None, is_appimage=None):
@@ -69,7 +67,7 @@ def check_for_new_version():
     try:
         if config.FROZEN:
             # use github API to get latest version
-            url = 'https://api.github.com/repos/firedm/firedm/releases/latest'
+            url = 'https://api.github.com/repos/GurucharanSavanth/FireDM/releases/latest'
             contents = download(url, verbose=False)
 
             if contents:
@@ -84,7 +82,7 @@ def check_for_new_version():
             log('Found new version:', str(latest_version))
 
             # download change log file
-            url = 'https://github.com/firedm/FireDM/raw/master/ChangeLog.txt'
+            url = f'{config.APP_URL}/raw/main/ChangeLog.txt'
             changelog = download(url, verbose=False)
     except Exception as e:
         log('check_for_new_version()> error:', e)
@@ -234,12 +232,10 @@ def update_pkg(pkg, url):
         shutil.copytree(target_pkg_folder, bkup_folder)
 
     def tar_extract():
-        with tarfile.open(z_fp, 'r') as tar:
-            tar.extractall(path=extract_folder)
+        safe_extract_tar(z_fp, extract_folder)
 
     def zip_extract():
-        with zipfile.ZipFile(z_fp, 'r') as z:
-            z.extractall(path=extract_folder)
+        safe_extract_zip(z_fp, extract_folder)
 
     extract = zip_extract
 
@@ -332,4 +328,3 @@ def rollback_pkg_update(pkg):
 
     except Exception as e:
         log('rollback_pkg_update()> error', e)
-

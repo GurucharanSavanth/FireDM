@@ -27,7 +27,8 @@
 
 ## Version Policy
 
-- Python: verified 3.10.11; metadata allows `>=3.10,<3.13`.
+- Python: verified 3.10.11; metadata is constrained to `>=3.10,<3.11`
+  until Python 3.11/3.12 pass local or CI validation.
 - Extractor: lower-bound on verified stable family, currently
   `yt-dlp[default]>=2026.3.17`.
 - Monthly extractor bumps require full pytest, P0 regression suite, live repro,
