@@ -69,6 +69,7 @@ def test_ffmpeg_service_reports_not_found_when_missing(tmp_path):
         saved_path="",
         search_dirs=(str(tmp_path),),
         operating_system="Windows",
+        path_lookup=lambda _: None,
         include_winget=False,
     )
     assert info.found is False
