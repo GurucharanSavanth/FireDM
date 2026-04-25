@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-04-23T14:36:23",
+  "timestamp": "2026-04-25T14:12:51",
   "exit_code": 0,
-  "duration_seconds": 1.84,
+  "duration_seconds": 3.22,
   "targets": [
     "tests/test_extractor_service.py",
     "tests/test_extractor_default_selection.py",
@@ -13,11 +13,14 @@
     "tests/test_stream_selection.py",
     "tests/test_ffmpeg_pipeline.py",
     "tests/test_download_handoff.py",
-    "tests/test_controller_video_integration.py"
+    "tests/test_controller_video_integration.py",
+    "tests/test_observer_isolation.py",
+    "tests/test_hls_parser_compat.py",
+    "tests/test_pipeline_logger_redaction.py"
   ],
-  "pytest_summary_line": "63 passed in 0.86s",
+  "pytest_summary_line": "71 passed in 2.02s",
   "stdout_tail": [
-    "...............................................................          [100%]",
-    "63 passed in 0.86s"
+    ".......................................................................  [100%]",
+    "71 passed in 2.02s"
   ]
 }

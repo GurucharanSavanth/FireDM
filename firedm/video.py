@@ -33,7 +33,7 @@ from .ffmpeg_commands import (
     dash_audio_extension_for,
 )
 from .ffmpeg_service import resolve_ffmpeg_path
-from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
+from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception, redact_url_for_log
 from .tool_discovery import resolve_binary_path
 from .utils import (log, validate_file_name, get_headers, format_bytes, run_command, delete_file, download, rename_file,
                     run_thread, import_file)
@@ -1014,15 +1014,43 @@ def pre_process_hls(d):
         # Use the active extractor's HLS parser (yt_dlp primary / youtube_dl
         # fallback). Hardcoding `youtube_dl` here used to break HLS flows
         # when the fallback failed to import.
+        #
+        # yt-dlp dropped the `_parse_m3u8_formats` symbol around the
+        # 2024-2026 cleanup; the surviving helper is
+        # `_parse_m3u8_formats_and_subtitles`, which returns a
+        # ``(formats, subtitles)`` tuple AND requires a bound ``self``
+        # because it calls ``self.get_param('hls_split_discontinuity', ...)``.
+        # youtube_dl 2021.x still ships the original name and tolerates
+        # ``None`` as ``self``. Construct a minimal extractor instance for
+        # the modern path so the call survives the rename and the
+        # ``get_param`` lookup.
         active = EXTRACTOR_SERVICE.active_module() or ytdl
         if active is None:
             log('refresh_urls()> no extractor available; skipping m3u8 refresh')
             return
-        extract_m3u8_formats = active.extractor.common.InfoExtractor._parse_m3u8_formats
+        ie_cls = active.extractor.common.InfoExtractor
+        modern = getattr(ie_cls, '_parse_m3u8_formats_and_subtitles', None)
+        legacy = getattr(ie_cls, '_parse_m3u8_formats', None)
+        if modern is None and legacy is None:
+            log('refresh_urls()> active extractor exposes no m3u8 parser; '
+                'skipping refresh', log_level=2)
+            return
 
         # get formats list [{'format_id': 'hls-160000mp4a.40.2-spa', 'url': 'http://ex.com/exp=15...'}, ...]
         # what we need is format_id and url
-        formats = extract_m3u8_formats(None, m3u8_doc, m3u8_url, m3u8_id='hls')  # not sure about  m3u8_id='hls'
+        try:
+            if modern is not None:
+                ydl_cls = getattr(active, 'YoutubeDL', None)
+                ie_instance = ie_cls(ydl_cls({}) if ydl_cls is not None else None)
+                formats, _subs = ie_instance._parse_m3u8_formats_and_subtitles(
+                    m3u8_doc, m3u8_url, m3u8_id='hls'
+                )
+            else:
+                formats = legacy(None, m3u8_doc, m3u8_url, m3u8_id='hls')
+        except Exception as exc:  # noqa: BLE001 - surface upstream API drift in pipeline log
+            from .pipeline_logger import pipeline_exception
+            pipeline_exception('hls_url_refresh', exc, m3u8_url=m3u8_url)
+            return
         for item in formats:
             url = item.get('url')
             # url = urljoin(d.manifest_url, url)
@@ -1061,7 +1089,7 @@ def pre_process_hls(d):
 
     # maybe the playlist is a direct media playlist and not a master playlist
     if d.manifest_url:
-        log('master manifest:   ', d.manifest_url)
+        log('master manifest:   ', redact_url_for_log(d.manifest_url))
         master_m3u8 = download_m3u8(d.manifest_url, http_headers=d.http_headers)
     else:
         log('No master manifest')
@@ -1078,7 +1106,7 @@ def pre_process_hls(d):
         if not "#EXT-X-TARGETDURATION" in master_m3u8:
             refresh_urls(master_m3u8, d.manifest_url)
 
-    log('video m3u8:        ', d.eff_url)
+    log('video m3u8:        ', redact_url_for_log(d.eff_url))
     video_m3u8 = download_m3u8(d.eff_url, http_headers=d.http_headers)
 
     # abort if no video_m3u8
@@ -1088,7 +1116,7 @@ def pre_process_hls(d):
 
     audio_m3u8 = None
     if 'dash' in d.subtype_list:
-        log('audio m3u8:        ', d.audio_url)
+        log('audio m3u8:        ', redact_url_for_log(d.audio_url))
         audio_m3u8 = download_m3u8(d.audio_url, http_headers=d.http_headers)
 
     # save remote m3u8 files to disk
@@ -1729,7 +1757,6 @@ def process_video(vid):
             raise e
     finally:
         vid.busy = False
-
 
 
 

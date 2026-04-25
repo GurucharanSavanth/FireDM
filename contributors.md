@@ -8,7 +8,7 @@ info.pyidm@gmail.com
 ---
 
 Developers who contributed with code:
-- @Aboghazala
+- @Aboghazala (Mahmoud Elshahat — original author, 2019-2022)
 - @shin-illua
 - @ryneeverett
 - @bertaga
@@ -16,6 +16,7 @@ Developers who contributed with code:
 - @fidele000 (Fidele K.Cyisa)
 - @sajjadhossanshimanto
 - @TgSeed
+- @GurucharanSavanth (Gurucharan Savanth — 2026 fork/revival modernization)
 
 ---
 

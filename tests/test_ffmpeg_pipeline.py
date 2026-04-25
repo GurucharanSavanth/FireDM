@@ -64,11 +64,16 @@ def test_audio_convert_command_acodec_copy_fast_path():
 
 def test_ffmpeg_service_reports_not_found_when_missing(tmp_path):
     """When every search path is empty, service returns a `not found`
-    result rather than raising or falling back to a hardcoded path."""
+    result rather than raising or falling back to a hardcoded path.
+
+    `path_lookup` is stubbed to None so the test is hermetic on hosts that
+    happen to have ffmpeg on PATH (e.g. dev machines with a Winget install).
+    """
     info = locate_ffmpeg(
         saved_path="",
         search_dirs=(str(tmp_path),),
         operating_system="Windows",
+        path_lookup=lambda _name: None,
         include_winget=False,
     )
     assert info.found is False

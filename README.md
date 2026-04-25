@@ -226,4 +226,4 @@ Developer references:
 Original author:
 Mahmoud Elshahat ( 2019-2022 original FireDM );
 
-Gurucharan.S ( 2026 fork/revival modernization ) Email: savanthgc@gmail.com
+Gurucharan Savanth ( 2026 fork/revival modernization ) Email: savanthgc@gmail.com

@@ -12,10 +12,16 @@
 
 ## Release Checklist
 
-- [ ] `.\.venv\Scripts\python.exe -m pytest -q` - expect 85 passed or newer.
+- [ ] `.\.venv\Scripts\python.exe -m pytest -q` - expect 101 passed or newer
+      (post-2026-04-25 revival: observer-isolation regression, HLS
+      parser-compat regression, hermetic ffmpeg-discovery test, and
+      pipeline URL-redaction regression added).
 - [ ] `.\.venv\Scripts\python.exe -m ruff check firedm\FireDM.py firedm\app_paths.py firedm\extractor_adapter.py firedm\ffmpeg_service.py firedm\tool_discovery.py firedm\setting.py firedm\update.py tests`
 - [ ] `.\.venv\Scripts\python.exe -m mypy`
-- [ ] `.\.venv\Scripts\python.exe scripts\run_regression_suite.py` - expect 63 passed or newer.
+- [ ] `.\.venv\Scripts\python.exe scripts\run_regression_suite.py` - expect 71 passed or newer
+      (regression suite TARGETS now include `tests/test_observer_isolation.py`,
+      `tests/test_hls_parser_compat.py`, and
+      `tests/test_pipeline_logger_redaction.py`).
 - [ ] `.\.venv\Scripts\python.exe scripts\repro_youtube_bug.py` - single-video and playlist pass.
 - [ ] `powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1`
 - [ ] `.\.venv\Scripts\python.exe scripts\verify_packaged_video_flow.py`

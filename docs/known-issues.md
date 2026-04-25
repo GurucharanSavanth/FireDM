@@ -34,3 +34,12 @@
 - formalize download-state transitions with typed enums/models
 - isolate `pycurl` transport more aggressively away from generic utility code
 - add mocked integration tests for controller/download lifecycle and extractor adapter behavior
+- per-segment stall watchdog for early-batch workers in `firedm/brain.py` (only the last batch currently sets pycurl `LOW_SPEED_LIMIT`/`LOW_SPEED_TIME`; see `artifacts/final/remaining_risks.md` R-M4)
+- replace remaining `firedm/tkview.py` render-tick `except:` swallows with a single rate-limited diagnostic helper; see `artifacts/final/remaining_risks.md` R-H2
+
+## Closed in 2026-04-25 revival pass
+- ffmpeg discovery test was non-hermetic (passed `include_winget=False` but not a hermetic `path_lookup`, so a Winget-installed ffmpeg on `PATH` made the test fail on dev machines). `tests/test_ffmpeg_pipeline.py::test_ffmpeg_service_reports_not_found_when_missing` now passes a stub `path_lookup`.
+- `firedm/model.py` `Observable._notify` rewrote `try: ... except: raise` (which aborted observer iteration on the first failing callback and bubbled out of every property setter) into per-callback isolation that surfaces failures via `pipeline_logger.pipeline_exception`. New regression: `tests/test_observer_isolation.py`.
+- `firedm/video.py` `refresh_urls` (HLS pre-process) called the removed-in-yt-dlp-2026 `_parse_m3u8_formats` symbol and would crash with `AttributeError` once a real DASH/HLS download triggered it. Adapted to the surviving `_parse_m3u8_formats_and_subtitles` (modern, requires bound `InfoExtractor` instance with `YoutubeDL` parent) with fallback to the legacy symbol for `youtube_dl` installs. Failures now log via `pipeline_exception('hls_url_refresh', ...)`. New regression: `tests/test_hls_parser_compat.py`.
+- `requirements.txt` floors synced with `pyproject.toml` (plyer, certifi, pycurl, pystray, packaging, distro) so `pip install -r requirements.txt` and `pip install -e .` resolve to the same dependency surface.
+- Pipeline structured logs now redact credential-bearing URL query parameters (token/signature/key/auth/session/cookie/password-style fields) while preserving host/path diagnostics. New regression: `tests/test_pipeline_logger_redaction.py`.

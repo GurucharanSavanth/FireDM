@@ -1,4 +1,4 @@
-[packaged-verify] timestamp=2026-04-23T14:45:25
+[packaged-verify] timestamp=2026-04-25T14:09:32
 [packaged-verify] --help exit=0 passed=True
 [packaged-verify] --show-settings exit=0 passed=True
 [packaged-verify] --imports-only exit=0 passed=True

@@ -35,6 +35,9 @@ that enforces it. All rows are green as of Commit 8.
 | Builder returns typed result for playlist | `tests/test_controller_video_integration.py` | `test_builder_returns_playlist_entries` |
 | Builder records skipped bad entries | `tests/test_controller_video_integration.py` | `test_builder_records_skipped_bad_entries` |
 | Controller delegates to builder | `tests/test_controller_video_integration.py` | `test_controller_create_video_playlist_delegates_to_builder` |
+| Observer callback failures do not abort other subscribers | `tests/test_observer_isolation.py` | `test_notify_runs_all_callbacks_when_one_raises`, `test_notify_continues_after_multiple_failures` |
+| yt-dlp HLS parser API drift is caught | `tests/test_hls_parser_compat.py` | `test_yt_dlp_exposes_a_usable_m3u8_format_parser`, `test_modern_m3u8_parser_returns_formats_subtitles_tuple` |
+| Pipeline URL fields redact signed credentials | `tests/test_pipeline_logger_redaction.py` | `test_pipeline_event_redacts_url_fields_and_detail` |
 | Packaged `firedm --help` works from source | `tests/test_packaged_diagnostics.py` | `test_firedm_help_runs_from_source` |
 | Packaged `--imports-only` smoke | `tests/test_packaged_diagnostics.py` | `test_firedm_imports_only_runs_from_source` |
 | Extractor default verify script passes | `tests/test_packaged_diagnostics.py` | `test_verify_extractor_default_script_passes` |
@@ -42,8 +45,9 @@ that enforces it. All rows are green as of Commit 8.
 
 ## Counts
 
-- Total P0 regression tests: 30+
-- Full test suite: **83 passed / 0 failed** (see
+- Total P0 regression tests: 35+
+- Full test suite: **101 passed / 0 failed**.
+- P0 regression suite: **71 passed / 0 failed** (see
   `artifacts/regression/regression_suite_result.json`).
 
 ## How to regenerate

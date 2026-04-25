@@ -31,6 +31,9 @@ TARGETS = [
     "tests/test_ffmpeg_pipeline.py",
     "tests/test_download_handoff.py",
     "tests/test_controller_video_integration.py",
+    "tests/test_observer_isolation.py",
+    "tests/test_hls_parser_compat.py",
+    "tests/test_pipeline_logger_redaction.py",
 ]
 
 

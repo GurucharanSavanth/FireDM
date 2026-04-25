@@ -4,17 +4,18 @@
 
 | Test / script | Result |
 | --- | --- |
-| Full pytest suite | `85 passed in 7.19s` |
+| Full pytest suite | `101 passed in 10.13s` |
 | Scoped Ruff gate | `All checks passed!` |
 | Scoped mypy gate | `Success: no issues found in 8 source files` |
-| P0 regression suite | `63 passed in 0.86s` |
+| P0 regression suite | `71 passed in 2.02s` |
 | `smoke_video_pipeline.py` | single-video and playlist passed |
 | `verify_extractor_default.py` | `passed=true`, active `yt_dlp` |
 | `verify_playlist_entry_normalization.py` | `7/7`, `overall_passed=true` |
 | `verify_ffmpeg_pipeline.py` | exit 0, ffmpeg found |
 | `verify_packaged_video_flow.py` | `overall_passed=true` |
 | `python -m build` | sdist + wheel built |
-| `pip check` | no broken requirements |
+| `twine check dist\*.whl dist\*.tar.gz` | wheel + sdist passed |
+| Pipeline URL redaction | signed query params redacted by `tests/test_pipeline_logger_redaction.py` |
 
 ## Real-Network Repro
 

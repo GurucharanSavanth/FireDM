@@ -18,13 +18,14 @@ phase artifacts were produced and refreshed in-place.
 
 ## Current Verification Snapshot
 
-- Full pytest: `85 passed`
-- P0 regression suite: `63 passed`
+- Full pytest: `101 passed`
+- P0 regression suite: `71 passed`
 - Real YouTube repro: single-video and playlist `overall_passed=true`
 - FFmpeg pipeline: exit 0, ffmpeg found from Winget fallback
 - Packaged diagnostics: `overall_passed=true`
 - Source build: sdist + wheel built
 - Windows package: `dist\FireDM` built with PyInstaller
+- Pipeline log redaction: signed URL query values covered by regression test
 
 ## Important Phase Artifacts
 

@@ -16,6 +16,7 @@ from .video import merge_video_audio, pre_process_hls, post_process_hls, \
     convert_audio, download_subtitles, write_metadata
 from . import config
 from .config import Status
+from .pipeline_logger import redact_url_for_log
 from .utils import (log, format_bytes, delete_file, rename_file, run_command, read_in_chunks)
 from .worker import Worker
 from .downloaditem import Segment
@@ -42,7 +43,7 @@ def brain(d=None):
     log('\n')
     log('-' * 50)
     log(f'start downloading file: "{d.name}", size: {format_bytes(d.total_size)}, to: {d.folder}')
-    log(f'url: "{d.url}" \n')
+    log(f'url: "{redact_url_for_log(d.url)}" \n')
 
     # hls / m3u8 protocols
     if 'hls' in d.subtype_list:

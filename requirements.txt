@@ -1,9 +1,9 @@
-plyer
-certifi
+plyer >= 2.1.0
+certifi >= 2024.0.0
 yt-dlp[default] >= 2026.3.17
-pycurl
+pycurl >= 7.45.2
 Pillow >= 10.0.0
-pystray
+pystray >= 0.19.5
 awesometkinter >= 2021.11.8
-packaging
-distro; platform_system == "Linux"
+packaging >= 24.0
+distro >= 1.9.0; platform_system == "Linux"

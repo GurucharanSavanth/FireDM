@@ -75,13 +75,27 @@ class Observable:
             self._notify(**buffer)
 
     def _notify(self, **kwargs):
-        """execute registered callbacks"""
+        """execute registered callbacks with per-callback exception isolation.
 
-        try:
-            for callback in self.observer_callbacks:
+        Observer notification is a fire-and-forget side effect of attribute
+        writes on Observable subclasses (see ``setter`` -> ``notify``).
+        A failing callback must not abort the iteration nor bubble out to
+        the attribute setter, otherwise one broken view subscriber blocks
+        every other subscriber from seeing the same change. Failures are
+        surfaced through the structured pipeline logger so they are still
+        visible in diagnostics.
+        """
+        from .pipeline_logger import pipeline_exception
+
+        for callback in self.observer_callbacks:
+            try:
                 callback(**kwargs)
-        except:
-            raise
+            except Exception as exc:  # noqa: BLE001 - intentionally broad: isolate any callback
+                pipeline_exception(
+                    "observer_callback",
+                    exc,
+                    callback=getattr(callback, "__qualname__", repr(callback)),
+                )
 
     def register_callback(self, callback):
         if callback not in self.observer_callbacks:
