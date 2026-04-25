@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-04-23T14:36:10",
+  "active": "yt_dlp",
+  "primary": "yt_dlp",
+  "fallback": "youtube_dl",
+  "versions": {
+    "yt_dlp": "2026.03.17",
+    "youtube_dl": "optional legacy package; installed in this venv as 2021.12.17",
+    "yt_dlp_ejs": "0.8.0",
+    "deno": "2.7.13"
+  },
+  "policy": {
+    "maintained_extractor_default": true,
+    "deprecated_extractor_default": false,
+    "legacy_fallback_optional": true
+  },
+  "evidence": [
+    "scripts/verify_extractor_default.py exit 0",
+    "scripts/repro_youtube_bug.py exit 0 with Deno solver logs",
+    "artifacts/diagnostics/runtime_snapshot.json"
+  ]
+}

@@ -2,28 +2,29 @@
 """
     FireDM
 
-    multi-connections internet download manager, based on "LibCurl", and "youtube_dl".
+    multi-connections internet download manager, based on "LibCurl", and "yt_dlp".
 
     :copyright: (c) 2019-2021 by Mahmoud Elshahat.
     :license: GNU LGPLv3, see LICENSE for more details.
 """
 
 # The purpose of this module is checking and auto installing dependencies
-import sys
-import subprocess
 import importlib.util
+import subprocess
+import sys
 
 # add the required packages here without any version numbers
-requirements = ['plyer', 'certifi', 'youtube_dl', 'yt_dlp', 'pycurl', 'PIL', 'pystray', 'awesometkinter']
+requirements = ['plyer', 'certifi', 'yt_dlp', 'pycurl', 'PIL', 'pystray', 'awesometkinter']
+pip_names = {
+    'PIL': 'pillow',
+    'yt_dlp': 'yt-dlp[default]',
+}
 
 
 def is_venv():
     """check if running inside virtual environment
     there is no 100% working method to tell, but we can check for both real_prefix and base_prefix"""
-    if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
-        return True
-    else:
-        return False
+    return hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
 
 
 def install_missing_pkgs():
@@ -36,9 +37,7 @@ def install_missing_pkgs():
         print('missing pkgs: ', missing_pkgs)
 
         for pkg in missing_pkgs:
-            # because 'pillow' is installed under different name 'PIL' will use pillow with pip github issue #60
-            if pkg == 'PIL':
-                pkg = 'pillow'
+            pkg = pip_names.get(pkg, pkg)
 
             # using "--user" flag is safer also avoid the need for admin privilege , but it fails inside venv, where pip
             # will install packages normally to user folder but venv still can't see those packages
@@ -50,7 +49,5 @@ def install_missing_pkgs():
 
             print('running command:', ' '.join(cmd))
             subprocess.run(cmd, shell=False)
-
-
 
 

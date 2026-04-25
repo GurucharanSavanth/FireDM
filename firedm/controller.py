@@ -33,6 +33,10 @@ from .utils import *
 from . import setting
 from . import config
 from .config import Status, MediaType
+from .ffmpeg_service import locate_ffmpeg
+from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
+from .playlist_builder import build_playlist_from_info
+from .playlist_entry import normalize_entry
 from .brain import brain
 from . import video
 from .video import get_media_info, process_video
@@ -61,59 +65,36 @@ def check_ffmpeg():
     and finally: system wide"""
 
     log('check ffmpeg availability?', log_level=2)
-    found = False
-    fn = 'ffmpeg.exe' if config.operating_system == 'Windows' else 'ffmpeg'
+    ffmpeg_info = locate_ffmpeg(
+        saved_path=config.ffmpeg_actual_path,
+        search_dirs=(config.current_directory, config.global_sett_folder),
+        operating_system=config.operating_system,
+    )
 
-    # check in predefined path
-    if os.path.isfile(config.ffmpeg_actual_path):
-        found = True
+    if ffmpeg_info.found:
+        config.ffmpeg_actual_path = ffmpeg_info.path
+        config.ffmpeg_version = ffmpeg_info.version
 
-    # search in current app directory then default setting folder
-    if not found:
-        try:
-            # if config.operating_system == 'Windows':
-            for folder in [config.current_directory, config.global_sett_folder]:
-                for file in os.listdir(folder):
-                    # print(file)
-                    if file == fn:
-                        found = True
-                        config.ffmpeg_actual_path = os.path.join(folder, file)
-                        break
-                if found:  # break outer loop
-                    break
-        except:
-            pass
-
-    # Search in the system
-    if not found:
-        cmd = 'where ffmpeg' if config.operating_system == 'Windows' else 'which ffmpeg'
-        error, output = run_command(cmd, verbose=False)
-        if not error:
-            found = True
-
-            # fix issue 47 where command line return \n\r with path
-            output = output.strip()
-            config.ffmpeg_actual_path = os.path.realpath(output)
-
-    if found:
         msg = f'ffmpeg checked ok! - at: {config.ffmpeg_actual_path}'
-
-        # get version
-        cmd = f'"{config.ffmpeg_actual_path}" -version'
-        error, out = run_command(cmd, verbose=False, striplines=False)
-        if not error:
-            try:
-                # ffmpeg version 4.3.2-0+deb11u1ubuntu1 Copyright (c) 2000-2021 the FFmpeg developers
-                match = re.match(r'ffmpeg version (.*?) Copyright', out, re.IGNORECASE)
-                config.ffmpeg_version = match.groups()[0]
-                msg += f', version: {config.ffmpeg_version}'
-            except:
-                pass
+        if config.ffmpeg_version:
+            msg += f', version: {config.ffmpeg_version}'
         log(msg, log_level=2)
+        pipeline_event(
+            PipelineStage.FFMPEG_DISCOVER,
+            "ok",
+            path=config.ffmpeg_actual_path,
+            version=config.ffmpeg_version,
+        )
         return True
-    else:
-        log(f'can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
-            config.global_sett_folder, 'or', config.current_directory)
+
+    log(f'can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
+        config.global_sett_folder, 'or', config.current_directory)
+    pipeline_event(
+        PipelineStage.FFMPEG_DISCOVER,
+        "fail",
+        detail="ffmpeg not located in saved path, current dir, global settings, or PATH",
+        searched=[config.current_directory, config.global_sett_folder],
+    )
 
 
 def write_timestamp(d):
@@ -218,73 +199,60 @@ def log_runtime_info():
 
 
 def create_video_playlist(url, ytdloptions=None, interrupt=False):
-    """Process url and build video object(s) and return a video playlist"""
+    """Process a URL and return a list of Video-like objects.
 
+    Delegates extractor I/O to `video.get_media_info` and parsing to
+    `playlist_builder.build_playlist_from_info`. The controller stays
+    responsible for orchestration (network fetch, thumbnail) but not
+    for walking entry dicts.
+    """
     log('creating video playlist', log_level=2)
-    playlist = []
-
     info = get_media_info(url, ytdloptions=ytdloptions, interrupt=interrupt)
-
     if not info:
         log('no video streams detected')
+        pipeline_event(
+            PipelineStage.PLAYLIST_PARSE,
+            "fail",
+            detail="get_media_info returned None",
+            url=url,
+        )
         return []
 
+    # For single-video URLs we still re-fetch with process=True so formats
+    # are populated. Playlists stay lazy (per-entry processing happens
+    # later via `process_video`).
+    _type = info.get('_type', 'video')
+    if _type not in ('playlist', 'multi_video') and 'entries' not in info:
+        processed = get_media_info(info=info, ytdloptions=ytdloptions)
+        if processed is None or not processed.get('formats'):
+            log('no video streams detected')
+            pipeline_event(
+                PipelineStage.PLAYLIST_PARSE,
+                "fail",
+                detail="processed_info missing formats",
+                url=url,
+                kind="single",
+            )
+            return []
+        info = processed
+
     try:
-        _type = info.get('_type', 'video')
-
-        # check results if _type is a playlist / multi_video -------------------------------------------------
-        if _type in ('playlist', 'multi_video') or 'entries' in info:
-            log('processing playlist')
-
-            # videos info
-            pl_info = list(info.get('entries'))  # info.get('entries') is a generator
-            # log('list(info.get(entries):', pl_info)
-
-            # create initial playlist with un-processed video objects
-            for v_info in pl_info:
-                v_info['formats'] = []
-
-                # get video's url
-                vid_url = v_info.get('webpage_url', None) or v_info.get('url', None) or v_info.get('id', None)
-
-                # create video object
-                vid = ObservableVideo(vid_url, v_info)
-
-                # update info
-                vid.playlist_title = info.get('title', '')
-                vid.playlist_url = url
-
-                # add video to playlist
-                playlist.append(vid)
-
-                # vid.register_callback(self.observer)
-        else:
-            processed_info = get_media_info(info=info, ytdloptions=ytdloptions)
-
-            if processed_info and processed_info.get('formats'):
-
-                # create video object
-                vid = ObservableVideo(url, processed_info)
-
-                # get thumbnail
-                vid.get_thumbnail()
-
-                # report done processing
-                vid.processed = True
-
-                # add video to playlist
-                playlist.append(vid)
-
-                # vid.register_callback(self.observer)
-            else:
-                log('no video streams detected')
+        result = build_playlist_from_info(url, info, observable_factory=ObservableVideo)
     except Exception as e:
-        playlist = []
+        pipeline_exception(PipelineStage.PLAYLIST_PARSE, e, url=url)
         log('controller.create_video_playlist:', e)
         if config.test_mode:
             raise e
+        return []
 
-    return playlist
+    # side-effect only the controller owns: pull thumbnails for single-entry results
+    if result.kind == "single" and result.videos:
+        try:
+            result.videos[0].get_thumbnail()
+        except Exception as e:
+            pipeline_exception(PipelineStage.PLAYLIST_PARSE, e, url=url, phase="thumbnail")
+
+    return result.videos
 
 
 def url_to_playlist(url, ytdloptions=None):
@@ -786,9 +754,8 @@ class Controller:
 
                 if not silent and config.operating_system == 'Windows':
                     res = self.get_user_response(popup_id=2)
-                    if res == 'Download':
-                        # download ffmpeg from github
-                        self._download_ffmpeg()
+                    if res == 'Open Help':
+                        self.open_ffmpeg_help()
                 else:
                     log('FFMPEG is missing', start='', showpopup=showpopup)
 
@@ -925,9 +892,23 @@ class Controller:
             if not download_later:
                 d.status = Status.pending
                 self.download_q.put(d)
+                pipeline_event(
+                    PipelineStage.DOWNLOAD_ENQUEUE,
+                    "ok",
+                    uid=d.uid,
+                    name=d.name,
+                    type=d.type,
+                )
 
             return True
         else:
+            pipeline_event(
+                PipelineStage.DOWNLOAD_ENQUEUE,
+                "fail",
+                detail="pre_download_checks rejected",
+                name=getattr(d, "name", None),
+                type=getattr(d, "type", None),
+            )
             return False
 
     @threaded
@@ -1010,35 +991,10 @@ class Controller:
                 d.shutdown_pc = False
                 self.shutdown_pc()
 
-    def _download_ffmpeg(self, destination=config.sett_folder):
-        """download ffmpeg.exe for windows os
-
-        Args:
-            destination (str): download folder
-
-        """
-
-        # set download folder
-        config.ffmpeg_download_folder = destination
-
-        # first check windows 32 or 64
-        import platform
-        # ends with 86 for 32 bit and 64 for 64 bit i.e. Win7-64: AMD64 and Vista-32: x86
-        if platform.machine().endswith('64'):
-            # 64 bit link
-            url = 'https://github.com/firedm/FireDM/releases/download/extra/ffmpeg_64bit.exe'
-        else:
-            # 32 bit link
-            url = 'https://github.com/firedm/FireDM/releases/download/extra/ffmpeg_32bit.exe'
-
-        log('downloading: ', url)
-
-        # create a download object, will save ffmpeg in setting folder
-        d = ObservableDownloadItem(url=url, folder=config.ffmpeg_download_folder)
-        d.update(url)
-        d.name = 'ffmpeg.exe'
-
-        self.download(d, silent=True)
+    def open_ffmpeg_help(self):
+        """Open ffmpeg install guidance instead of downloading stale repo assets."""
+        log('opening ffmpeg install help:', config.FFMPEG_DOWNLOAD_HELP_URL)
+        open_webpage(config.FFMPEG_DOWNLOAD_HELP_URL)
 
     def autodownload(self, url, **kwargs):
         """download file automatically without user intervention
@@ -1166,15 +1122,18 @@ class Controller:
                 msg += f'    {pkg}: up to date!\n\n'
 
         if new_pkgs:
-            msg += 'Do you want to update now? \n'
-            options = ['Update', 'Cancel']
+            action_label = 'Update' if update.self_update_supported() else 'Open release page'
+            msg += 'Do you want to continue now? \n'
+            if not update.self_update_supported():
+                msg += f'\n{update.get_update_instructions()}\n'
+            options = [action_label, 'Cancel']
 
             # show update notes for firedm
             if 'firedm' in new_pkgs:
                 log('getting FireDM changelog ....')
 
                 # download change log file
-                url = 'https://github.com/firedm/FireDM/raw/master/ChangeLog.txt'
+                url = f'{config.APP_URL}/raw/main/ChangeLog.txt'
                 changelog = download(url, verbose=False)
 
                 # verify server didn't send html page
@@ -1185,6 +1144,10 @@ class Controller:
 
             res = self.get_user_response(msg, options)
             if res == options[0]:
+                if not update.self_update_supported():
+                    update.open_update_link()
+                    log(update.get_update_instructions(), showpopup=True)
+                    return
 
                 # check write permission
                 tf = update.get_target_folder('firedm')
@@ -1852,4 +1815,3 @@ class Controller:
 
         # update view
         self.report_d(d, threaded=False)
-

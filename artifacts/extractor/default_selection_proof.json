@@ -1,0 +1,19 @@
+{
+  "active": "yt_dlp",
+  "primary": "yt_dlp",
+  "fallback": "youtube_dl",
+  "primary_loaded": true,
+  "fallback_loaded": false,
+  "versions": {
+    "yt_dlp": "2026.03.17"
+  },
+  "configured_before": "yt_dlp",
+  "ready_within_45s": true,
+  "after_fallback_override": {
+    "configured_value": "yt_dlp",
+    "active": "yt_dlp"
+  },
+  "expected_active": "yt_dlp",
+  "passed": true,
+  "timestamp": "2026-04-24T13:55:27"
+}

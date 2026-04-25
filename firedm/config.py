@@ -1,7 +1,7 @@
 """
     FireDM
 
-    multi-connections internet download manager, based on "LibCurl", and "youtube_dl".
+    multi-connections internet download manager, based on "LibCurl", "yt_dlp", and Tkinter.
 
     :copyright: (c) 2019-2021 by Mahmoud Elshahat.
     :license: GNU LGPLv3, see LICENSE for more details.
@@ -36,8 +36,9 @@ APP_TITLE = f'{APP_NAME} version {APP_VERSION} .. an open source download manage
 # minimum segment size used in auto-segmentation process, refer to brain.py>thread_manager.
 SEGMENT_SIZE = 1024 * 100  # 100 KB
 
-APP_URL = 'https://github.com/firedm/FireDM'
-LATEST_RELEASE_URL = 'https://github.com/firedm/FireDM/releases/latest'
+APP_URL = 'https://github.com/GurucharanSavanth/FireDM'
+LATEST_RELEASE_URL = 'https://github.com/GurucharanSavanth/FireDM/releases/latest'
+FFMPEG_DOWNLOAD_HELP_URL = 'https://ffmpeg.org/download.html'
 
 FROZEN = getattr(sys, "frozen", False)  # check if app is being compiled by cx_freeze
 
@@ -284,10 +285,10 @@ popups = {
         },
 
     2: {'tag': 'ffmpeg',
-        'description': 'Prompt to download "FFMPEG" if not found on windows os.',
-        'body': 'FFMPEG is missing!',
-        'options': ['Download', 'Cancel'],
-        'default': 'Download',
+        'description': 'Prompt for ffmpeg install help if not found on Windows.',
+        'body': 'FFMPEG is missing! Install ffmpeg or add ffmpeg.exe to the app folder, PATH, or Winget package folder.',
+        'options': ['Open Help', 'Cancel'],
+        'default': 'Open Help',
         'show': True
         },
 

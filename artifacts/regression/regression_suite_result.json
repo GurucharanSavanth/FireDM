@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-04-23T14:36:23",
+  "exit_code": 0,
+  "duration_seconds": 1.84,
+  "targets": [
+    "tests/test_extractor_service.py",
+    "tests/test_extractor_default_selection.py",
+    "tests/test_extractor_adapter.py",
+    "tests/test_legacy_extractor_fallback.py",
+    "tests/test_playlist_entry_normalization.py",
+    "tests/test_playlist_flow.py",
+    "tests/test_single_video_flow.py",
+    "tests/test_stream_selection.py",
+    "tests/test_ffmpeg_pipeline.py",
+    "tests/test_download_handoff.py",
+    "tests/test_controller_video_integration.py"
+  ],
+  "pytest_summary_line": "63 passed in 0.86s",
+  "stdout_tail": [
+    "...............................................................          [100%]",
+    "63 passed in 0.86s"
+  ]
+}

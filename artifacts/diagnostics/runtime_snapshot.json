@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-04-23T14:36:10",
+  "python": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "extractor_service": {
+    "active": "yt_dlp",
+    "primary": "yt_dlp",
+    "fallback": "youtube_dl",
+    "primary_loaded": true,
+    "fallback_loaded": false,
+    "versions": {
+      "yt_dlp": "2026.03.17"
+    }
+  },
+  "legacy_ytdl_global": "yt_dlp",
+  "ffmpeg": {
+    "path": "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-essentials_build\\bin\\ffmpeg.exe",
+    "version": "8.1-essentials_build-www.gyan.dev",
+    "found": true
+  },
+  "javascript_runtime": {
+    "deno_path": "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe\\deno.exe",
+    "deno_version": "deno 2.7.13 (stable, release, x86_64-pc-windows-msvc)",
+    "yt_dlp_ejs_version": "0.8.0"
+  },
+  "config": {
+    "active_video_extractor": "yt_dlp",
+    "yt_dlp_version": "2026.03.17",
+    "youtube_dl_version": null,
+    "download_folder": "C:\\Users\\SavanthGC\\Downloads",
+    "sett_folder": null,
+    "global_sett_folder": null,
+    "temp_folder": "",
+    "use_cookies": false,
+    "max_concurrent_downloads": 3
+  },
+  "pipeline_stages": {
+    "DOWNLOAD_ENQUEUE": "download_enqueue",
+    "DOWNLOAD_START": "download_start",
+    "EXTRACTOR_LOAD": "extractor_load",
+    "EXTRACTOR_READY": "extractor_ready",
+    "EXTRACTOR_SELECT": "extractor_select",
+    "FFMPEG_DISCOVER": "ffmpeg_discover",
+    "FFMPEG_MERGE": "ffmpeg_merge",
+    "METADATA_FETCH": "metadata_fetch",
+    "PLAYLIST_ENTRY_NORMALIZE": "playlist_entry_normalize",
+    "PLAYLIST_PARSE": "playlist_parse",
+    "STREAM_BUILD": "stream_build",
+    "STREAM_SELECT": "stream_select"
+  }
+}

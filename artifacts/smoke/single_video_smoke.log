@@ -1,0 +1,3 @@
+[smoke] single-video begin
+[smoke] single-video streams=11 menu=14 eff_url=https://example.invalid/1080p-dash.mp4
+[smoke] dash_audio_paired=True

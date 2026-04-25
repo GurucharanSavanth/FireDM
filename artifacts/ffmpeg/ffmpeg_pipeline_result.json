@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-04-23T14:36:09",
+  "ffmpeg": {
+    "found": true,
+    "path": "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-essentials_build\\bin\\ffmpeg.exe",
+    "version": "8.1-essentials_build-www.gyan.dev"
+  },
+  "merge_command": {
+    "fast_uses_stream_copy": true,
+    "slow_reencodes": true,
+    "argv_fast_length": 12
+  },
+  "hls_command": {
+    "protocol_whitelist_set": true,
+    "allowed_extensions_all": true,
+    "argv_fast_length": 14
+  },
+  "audio_convert_command": {
+    "fast_uses_acodec_copy": true,
+    "argv_fast_length": 10
+  },
+  "dash_audio_extension_rules": {
+    "mp4": "m4a",
+    "webm": "webm",
+    "mkv": "mkv"
+  }
+}

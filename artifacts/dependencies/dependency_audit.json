@@ -1,0 +1,98 @@
+{
+  "timestamp": "2026-04-23T14:25:22",
+  "environment": {
+    "python": "3.10.11",
+    "platform": "Windows",
+    "venv": ".venv"
+  },
+  "decisions": [
+    {
+      "name": "yt-dlp",
+      "installed": "2026.3.17",
+      "role": "primary extractor",
+      "decision": "upgrade policy to yt-dlp[default]>=2026.3.17",
+      "risk": "high",
+      "windows_impact": "requires Deno or supported JS runtime for full YouTube support"
+    },
+    {
+      "name": "youtube-dl",
+      "installed": "2021.12.17",
+      "role": "legacy extractor",
+      "decision": "optional legacy extra only",
+      "risk": "high",
+      "windows_impact": "removed from default install surface"
+    },
+    {
+      "name": "yt-dlp-ejs",
+      "installed": "0.8.0",
+      "role": "YouTube JS solver scripts",
+      "decision": "required through yt-dlp default extra",
+      "risk": "high",
+      "windows_impact": "PyInstaller collects data files"
+    },
+    {
+      "name": "Deno",
+      "installed": "2.7.13",
+      "role": "JavaScript runtime",
+      "decision": "external required/recommended tool, auto-discovered",
+      "risk": "medium",
+      "windows_impact": "Winget package directory fallback"
+    },
+    {
+      "name": "pycurl",
+      "installed": "7.45.7",
+      "role": "download transport",
+      "decision": "keep",
+      "risk": "high",
+      "windows_impact": "official wheel verified"
+    },
+    {
+      "name": "ffmpeg",
+      "installed": "8.1",
+      "role": "media post-processing",
+      "decision": "keep external, improve discovery",
+      "risk": "high",
+      "windows_impact": "Winget fallback and yt-dlp ffmpeg_location"
+    },
+    {
+      "name": "PyInstaller",
+      "installed": "6.20.0",
+      "role": "Windows packaging",
+      "decision": "keep",
+      "risk": "medium",
+      "windows_impact": "primary release packager"
+    },
+    {
+      "name": "pytest",
+      "installed": "9.0.3",
+      "role": "tests",
+      "decision": "keep",
+      "risk": "low",
+      "windows_impact": "passes locally"
+    },
+    {
+      "name": "ruff",
+      "installed": "0.15.11",
+      "role": "lint/format",
+      "decision": "keep scoped",
+      "risk": "medium",
+      "windows_impact": "fast local check"
+    },
+    {
+      "name": "mypy",
+      "installed": "1.20.2",
+      "role": "static typing",
+      "decision": "keep scoped",
+      "risk": "medium",
+      "windows_impact": "no runtime effect"
+    },
+    {
+      "name": "uv",
+      "installed": null,
+      "role": "optional dependency manager",
+      "decision": "defer",
+      "risk": "medium",
+      "windows_impact": "avoid second workflow for now"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-04-23T14:45:25",
+  "checks": {
+    "help": {
+      "exit_code": 0,
+      "stdout_head": [
+        "",
+        ">> setting.cfg not found",
+        "usage: ",
+        "firedm [OPTIONS] URL1 URL2 URL3 "
+      ],
+      "passed": true
+    },
+    "show_settings": {
+      "exit_code": 0,
+      "stdout_head": [
+        "",
+        ">> setting.cfg not found",
+        "active_video_extractor: yt_dlp",
+        "auto_rename: False",
+        "autoscroll_download_tab: False",
+        "check_for_update: True",
+        "checksum: False",
+        "current_theme: Orange_Black",
+        "custom_user_agent: None",
+        "disable_log_popups: False"
+      ],
+      "passed": true
+    },
+    "imports_only": {
+      "exit_code": 0,
+      "stdout_head": [
+        "",
+        ">> setting.cfg not found",
+        "imported module: plyer 2.1.0, in 0.0 sec",
+        "imported module: certifi 2026.04.22, in 0.0 sec",
+        "imported module: yt_dlp 2026.03.17, in 0.4 sec",
+        "imported module: yt_dlp_ejs 0.8.0, in 0.0 sec",
+        "imported module: pycurl PycURL/\"7.45.7\" libcurl/8.15.0-DEV (OpenSSL/3.5.2) Schannel zlib/1.3.1 brotli/1.1.0 libssh2/1.11.1_DEV nghttp2/1.67.0, in 0.0 sec",
+        "imported module: PIL 12.2.0, in 0.0 sec"
+      ],
+      "stderr_head": [],
+      "passed": true
+    },
+    "gui_launch": {
+      "alive_after_4s": true,
+      "passed": true
+    }
+  },
+  "overall_passed": true
+}

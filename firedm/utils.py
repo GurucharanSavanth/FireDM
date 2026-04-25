@@ -22,6 +22,8 @@ import certifi
 import shutil
 import json
 import zipfile
+import tarfile
+import ntpath
 import urllib.request
 import platform
 import subprocess
@@ -1248,8 +1250,47 @@ def zip_extract(z_fp, extract_folder):
         z_fp(str): zip file path
         extract_folder(str): target folder path
     """
+    safe_extract_zip(z_fp, extract_folder)
+
+
+def _archive_member_target(extract_folder, member_name):
+    if not member_name:
+        raise ValueError("archive member has empty name")
+
+    normalized = str(member_name).replace("\\", "/")
+    if normalized.startswith("/") or ntpath.isabs(member_name) or ntpath.splitdrive(member_name)[0]:
+        raise ValueError(f"archive member path is absolute: {member_name!r}")
+
+    target = os.path.abspath(os.path.join(extract_folder, *normalized.split("/")))
+    base = os.path.abspath(extract_folder)
+    try:
+        inside_target = os.path.commonpath([base, target]) == base
+    except ValueError:
+        inside_target = False
+
+    if not inside_target:
+        raise ValueError(f"archive member escapes target folder: {member_name!r}")
+
+    return target
+
+
+def safe_extract_zip(z_fp, extract_folder):
+    """Extract a zip archive after validating every target path."""
     with zipfile.ZipFile(z_fp, 'r') as z:
+        for member in z.infolist():
+            _archive_member_target(extract_folder, member.filename)
         z.extractall(path=extract_folder)
+
+
+def safe_extract_tar(tar_fp, extract_folder):
+    """Extract a tar archive after validating paths and rejecting links."""
+    with tarfile.open(tar_fp, 'r') as tar:
+        members = tar.getmembers()
+        for member in members:
+            _archive_member_target(extract_folder, member.name)
+            if member.issym() or member.islnk():
+                raise ValueError(f"archive member links are not allowed: {member.name!r}")
+        tar.extractall(path=extract_folder, members=members)
 
 
 def create_folder(folder_path):
@@ -1334,8 +1375,8 @@ __all__ = [
     'load_json', 'save_json', 'natural_sort', 'is_pkg_exist', 'parse_bytes', 'set_curl_options', 'open_folder',
     'auto_rename', 'calc_md5', 'calc_md5_sha256', 'calc_sha256', 'get_range_list',
     'run_thread', 'generate_unique_name', 'open_webpage', 'threaded', 'parse_urls', 'get_media_duration',
-    'get_pkg_path', 'get_pkg_version', 'import_file', 'zip_extract', 'create_folder', 'simpledownload', 'ignore_errors',
-    'check_write_permission', 'thread_after', 'read_in_chunks'
+    'get_pkg_path', 'get_pkg_version', 'import_file', 'zip_extract', 'safe_extract_zip', 'safe_extract_tar',
+    'create_folder', 'simpledownload', 'ignore_errors', 'check_write_permission', 'thread_after', 'read_in_chunks'
 ]
 
 if __name__ == '__main__':

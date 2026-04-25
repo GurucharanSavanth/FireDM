@@ -2,7 +2,7 @@ about_notes = """FireDM is an open source multi-connections download manager, it
 general files, support downloading videos, and playlists from youtube, 
 and other media websites.
 
-Developed in Python, based on "LibCurl", and "youtube_dl"
+Developed in Python, based on "LibCurl", "yt_dlp", and "Tkinter"
   
 This application is free to use, in a hope to be useful for someone,
 
@@ -22,7 +22,7 @@ Conditions and usage restrictions:
 ------------------------------------------------------------------------
 
 your feedback is most welcomed on:
-https://github.com/firedm/FireDM
+https://github.com/GurucharanSavanth/FireDM
 email: info.pyidm@gmail.com
 
 Author,

@@ -19,6 +19,22 @@ import subprocess
 
 from . import config
 from .downloaditem import DownloadItem, Segment
+from .extractor_adapter import (
+    FALLBACK_EXTRACTOR,
+    PRIMARY_EXTRACTOR,
+    SERVICE as EXTRACTOR_SERVICE,
+    choose_extractor_name,
+    load_extractor_module,
+)
+from .ffmpeg_commands import (
+    build_audio_convert_command,
+    build_hls_process_command,
+    build_merge_command,
+    dash_audio_extension_for,
+)
+from .ffmpeg_service import resolve_ffmpeg_path
+from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
+from .tool_discovery import resolve_binary_path
 from .utils import (log, validate_file_name, get_headers, format_bytes, run_command, delete_file, download, rename_file,
                     run_thread, import_file)
 
@@ -51,19 +67,47 @@ class Logger(object):
         return "youtube-dl Logger"
 
 
+def resolve_deno_runtime_path():
+    return resolve_binary_path(
+        "deno",
+        operating_system=config.operating_system,
+    )
+
+
 def get_ytdl_options():
-    # reference: https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/__init__.py#L317
     ydl_opts = {'ignoreerrors': True, 'logger': Logger()}  # 'prefer_insecure': False, 'no_warnings': False,
+
+    active_extractor = getattr(ytdl, "__name__", None) or EXTRACTOR_SERVICE.snapshot().get("active")
+    if active_extractor == PRIMARY_EXTRACTOR:
+        deno_path = resolve_deno_runtime_path()
+        ydl_opts["js_runtimes"] = {"deno": {"path": deno_path} if deno_path else {}}
+
+        ffmpeg_path = resolve_ffmpeg_path(
+            saved_path=config.ffmpeg_actual_path or "",
+            search_dirs=(config.current_directory, config.global_sett_folder or ""),
+            operating_system=config.operating_system,
+        )
+        if ffmpeg_path:
+            ydl_opts["ffmpeg_location"] = ffmpeg_path
+
     if config.proxy:
         # youtube-dl accept socks4a, but not socks5h,
         # https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/utils.py#L5404
         proxy = config.proxy.replace('socks5h', 'socks5')
         ydl_opts['proxy'] = proxy
 
-    # set Referer website
-    if config.referer_url:
-        # this is not accessible via youtube-dl options, changing standard headers is the only way
-        ytdl.utils.std_headers['Referer'] = config.referer_url
+    # set Referer website — apply to whichever extractor is active. `std_headers`
+    # is a module-level mapping in both yt_dlp and youtube_dl; changing it is
+    # the only way to pass Referer since it is not exposed as a ydl option.
+    if config.referer_url and ytdl is not None:
+        try:
+            ytdl.utils.std_headers['Referer'] = config.referer_url
+        except Exception as e:
+            pipeline_exception(
+                PipelineStage.EXTRACTOR_SELECT,
+                e,
+                phase="referer_header",
+            )
 
     # verify / bypass server's ssl certificate
     ydl_opts['nocheckcertificate'] = config.ignore_ssl_cert
@@ -178,29 +222,51 @@ class Video(DownloadItem):
             self.select_stream(index=1)
 
     def get_title(self, outtmpl=None):
-        # get video title template
-        outtmpl = outtmpl or config.video_title_template or '%(title)s'
+        # Title rendering uses the extractor's own `prepare_filename` so
+        # user-facing templates like `%(title)s - %(uploader)s` keep working.
+        # When no extractor is loaded (headless tests, early startup) fall
+        # back to `simpletitle` instead of crashing.
+        if ytdl is None or not self.all_streams:
+            return self.simpletitle
 
-        # remove extension, it will be added later depend on stream type
+        outtmpl = outtmpl or config.video_title_template or '%(title)s'
         outtmpl = outtmpl.replace('.%(ext)s', '')
 
-        # get global youtube_dl options
         options = get_ytdl_options()
         options['outtmpl'] = outtmpl
 
-        ydl = ytdl.YoutubeDL(options)
-
-        # get video title template
-        if self.all_streams:
+        try:
+            ydl = ytdl.YoutubeDL(options)
             info = self.vid_info
             if self.audio_stream:
                 info.update(**self.audio_stream.stream_info)
             info.update(**self.selected_stream.stream_info)
-            title = ydl.prepare_filename(info)
-            return title
+            return ydl.prepare_filename(info)
+        except Exception as e:
+            pipeline_exception(PipelineStage.STREAM_SELECT, e, phase="title_template")
+            return self.simpletitle
 
     def _process_streams(self):
-        all_streams = [Stream(x) for x in self.vid_info['formats']]
+        raw_formats = self.vid_info.get('formats', []) or []
+        pipeline_event(
+            PipelineStage.STREAM_BUILD,
+            "start",
+            url=getattr(self, "url", ""),
+            formats=len(raw_formats),
+        )
+        all_streams = []
+        for idx, fmt in enumerate(raw_formats):
+            try:
+                all_streams.append(Stream(fmt))
+            except Exception as e:
+                pipeline_exception(
+                    PipelineStage.STREAM_BUILD,
+                    e,
+                    format_id=fmt.get('format_id') if isinstance(fmt, dict) else None,
+                    idx=idx,
+                )
+                if config.test_mode:
+                    raise
         all_streams.reverse()  # get higher quality first
 
         # streams have mediatype = (normal, dash, audio, others)
@@ -478,9 +544,8 @@ class Video(DownloadItem):
                 streams = [stream for stream in streams if stream.isfragmented == video_stream.isfragmented] or streams
 
                 # filter for compatible extension, faster muxing by ffmpeg,
-                # also to avoid errors when muxing m4a audio with webm video using "-c copy" flag, example ffmpeg error
-                # [webm@xx] Only VP8 or VP9 or AV1 video and Vorbis or Opus audio and WebVTT subtitles are supported for WebM.
-                ext = 'm4a' if video_stream.extension == 'mp4' else video_stream.extension
+                # also to avoid errors when muxing m4a audio with webm video using "-c copy" flag
+                ext = dash_audio_extension_for(video_stream.extension)
                 streams = [stream for stream in streams if stream.extension == ext] or streams
 
                 if quality == 'lowest':
@@ -517,6 +582,28 @@ class Video(DownloadItem):
         self.setup()
 
 
+def _coerce_number(value, default=0):
+    """Coerce extractor-reported numeric fields to `default` on None/blank.
+
+    yt_dlp and youtube_dl both emit dict entries with explicit `None` values
+    for fields they could not detect (e.g. `abr`, `tbr`, `height` on audio-
+    only or storyboard formats). `dict.get(key, default)` returns `None`
+    rather than `default` when the key is present with a `None` value, so
+    downstream arithmetic like `abr * 1024` blows up.
+
+    This helper normalizes to a numeric default and survives unexpected
+    types without raising.
+    """
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return type(default)(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class Stream:
     def __init__(self, stream_info):
         # fetch data from youtube-dl stream_info dictionary
@@ -525,13 +612,13 @@ class Stream:
         self.url = stream_info.get('url', None)
         self.player_url = stream_info.get('player_url', None)
         self.extension = stream_info.get('ext', None)
-        self.width = stream_info.get('width', 0)
-        self.height = stream_info.get('height', 0)
+        self.width = _coerce_number(stream_info.get('width'), 0)
+        self.height = _coerce_number(stream_info.get('height'), 0)
         self.fps = stream_info.get('fps', None)  # frame per second
         self.format_note = stream_info.get('format_note', '')
         self.acodec = stream_info.get('acodec', None)
-        self.abr = stream_info.get('abr', 0)
-        self.tbr = stream_info.get('tbr', 0)  # for videos == BANDWIDTH/1000
+        self.abr = _coerce_number(stream_info.get('abr'), 0)
+        self.tbr = _coerce_number(stream_info.get('tbr'), 0)  # for videos == BANDWIDTH/1000
         self.size = stream_info.get('filesize', None)
         # self.quality = stream_info.get('quality', None)
         self.vcodec = stream_info.get('vcodec', None)
@@ -554,7 +641,7 @@ class Stream:
         self.protocol = stream_info.get('protocol', '')
 
         # calculate some values
-        self.rawbitrate = stream_info.get('abr', 0) * 1024
+        self.rawbitrate = self.abr * 1024
         self._mediatype = None
         self.resolution = f'{self.width}x{self.height}' if (self.width and self.height) else ''
 
@@ -660,21 +747,49 @@ def run_ffmpeg(cmd, d):
 def merge_video_audio(video, audio, output, d):
     """merge video file and audio file into output file, d is a reference for current DownloadItem object"""
     log('merging video and audio')
+    pipeline_event(
+        PipelineStage.FFMPEG_MERGE,
+        "start",
+        video=video,
+        audio=audio,
+        output=output,
+        ffmpeg=config.ffmpeg_actual_path,
+    )
 
-    cmd = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y -i "{video}" -i "{audio}"'
-    fastcmd = cmd + f' -c copy "{output}"'  # fast process, copy audio, format must match [mp4, m4a] and [webm, webm]
-    slowcmd = cmd + f' "{output}"'  # slow, mix different formats
+    pair = build_merge_command(
+        video_file=video,
+        audio_file=audio,
+        output_file=output,
+        ffmpeg_path=config.ffmpeg_actual_path,
+    )
 
-    error, output = run_ffmpeg(fastcmd, d)
+    error, out = run_ffmpeg(pair.fast, d)
+    attempted = ["fast"]
 
     if error:
-        error, output = run_ffmpeg(slowcmd, d)
+        pipeline_event(
+            PipelineStage.FFMPEG_MERGE,
+            "warn",
+            detail="fast stream-copy failed, retrying with transcode",
+            first_error=out,
+        )
+        error, out = run_ffmpeg(pair.slow, d)
+        attempted.append("slow")
 
-    return error, output
+    if error:
+        pipeline_event(PipelineStage.FFMPEG_MERGE, "fail", attempted=attempted, error=out)
+    else:
+        pipeline_event(PipelineStage.FFMPEG_MERGE, "ok", attempted=attempted)
+
+    return error, out
 
 
 def load_user_extractors(engine=youtube_dl):
     # load user's video extractors
+    if not config.sett_folder:
+        # settings folder hasn't been resolved yet (headless tool / early
+        # startup). Nothing to load.
+        return
     extractors_folder = os.path.join(config.sett_folder, 'extractors')
     if not os.path.isdir(extractors_folder):
         return
@@ -707,74 +822,145 @@ def load_user_extractors(engine=youtube_dl):
 
 
 def load_extractor_engines(reload=False):
-    """import extractor engines
-    should call this from a thread because sometimes youtube_dl takes around 20 seconds to get imported and impact
-    app startup time
+    """Import extractor engines and record them with the adapter service.
+
+    The primary (`yt_dlp`) is always preferred as the runtime extractor.
+    The fallback (`youtube_dl`) is loaded best-effort so legacy user
+    extractors keep working, but it is never chosen as the active extractor
+    when the primary is available.
+
+    Imports run in daemon threads so GUI startup stays snappy, but the
+    default-selection decision is deterministic: `ExtractorService` applies
+    `choose_extractor_name` every time an engine loads and promotes the
+    primary as soon as it is present.
 
     Args:
-        reload (bool): if true it will reload modules instead of importing, needed after modules update
+        reload (bool): if True, reload modules in place (used by update flows).
     """
 
-    # youtube-dl ----------------------------------------------------------------------------------------------------
-    def import_youtube_dl():
-        global youtube_dl
+    def _load_user_extractors_safely(engine, engine_name):
+        if engine is None:
+            return
+        try:
+            load_user_extractors(engine=engine)
+        except Exception as e:
+            pipeline_exception(
+                PipelineStage.EXTRACTOR_LOAD,
+                e,
+                engine=engine_name,
+                phase="user_extractors",
+            )
+            log(f'load_user_extractors({engine_name}) error:', e, log_level=2)
+
+    def _import_engine(name, existing_module, version_attr):
+        pipeline_event(PipelineStage.EXTRACTOR_LOAD, "start", engine=name)
         start = time.time()
+        try:
+            extractor = load_extractor_module(
+                name,
+                reload_existing=reload,
+                existing_module=existing_module,
+            )
+        except Exception as e:
+            pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine=name)
+            log(f'{name} import failed:', e, log_level=2)
+            return None
 
-        if reload and youtube_dl:
-            importlib.reload(youtube_dl)
-        else:
-            import youtube_dl
-
-        config.youtube_dl_version = youtube_dl.version.__version__
-
-        # calculate loading time
+        setattr(config, version_attr, extractor.version)
         load_time = time.time() - start
-        log(f'youtube_dl version: {config.youtube_dl_version}, load_time= {int(load_time)} seconds', log_level=2)
+        log(f'{name} version: {extractor.version}, load_time= {int(load_time)} seconds', log_level=2)
+        pipeline_event(
+            PipelineStage.EXTRACTOR_LOAD,
+            "ok",
+            engine=name,
+            version=extractor.version,
+            load_seconds=round(load_time, 2),
+        )
+        return extractor
 
-        # get a random user agent and update headers
-        if not config.custom_user_agent:
-            config.http_headers['User-Agent'] = youtube_dl.utils.random_user_agent()
-
-        # set default extractor
-        if config.active_video_extractor == 'youtube_dl':
-            set_default_extractor('youtube_dl')
-
-        load_user_extractors(engine=youtube_dl)
-
-    # yt_dlp ----------------------------------------------------------------------------------------------------
-    def import_yt_dlp():
+    # primary -------------------------------------------------------------
+    def import_primary():
         global yt_dlp
+        extractor = _import_engine('yt_dlp', yt_dlp, 'yt_dlp_version')
+        if extractor is None:
+            return
+        yt_dlp = extractor.module
+        EXTRACTOR_SERVICE.record_load(extractor)
+        _sync_module_globals()
+        _load_user_extractors_safely(yt_dlp, 'yt_dlp')
 
-        start = time.time()
+    # fallback ------------------------------------------------------------
+    def import_fallback():
+        global youtube_dl
+        extractor = _import_engine('youtube_dl', youtube_dl, 'youtube_dl_version')
+        if extractor is None:
+            return
+        youtube_dl = extractor.module
+        EXTRACTOR_SERVICE.record_load(extractor)
+        _sync_module_globals()
 
-        if reload and yt_dlp:
-            importlib.reload(yt_dlp)
-        else:
-            import yt_dlp
+        # legacy user-agent path kept for non-custom configurations
+        if not config.custom_user_agent:
+            try:
+                config.http_headers['User-Agent'] = youtube_dl.utils.random_user_agent()
+            except Exception as e:
+                pipeline_exception(PipelineStage.EXTRACTOR_LOAD, e, engine='youtube_dl', phase='user_agent')
 
-        config.yt_dlp_version = yt_dlp.version.__version__
+        _load_user_extractors_safely(youtube_dl, 'youtube_dl')
 
-        # calculate loading time
-        load_time = time.time() - start
-        log(f'yt_dlp version: {config.yt_dlp_version}, load_time= {int(load_time)} seconds', log_level=2)
+    run_thread(import_fallback, daemon=True)
+    run_thread(import_primary, daemon=True)
 
-        # set default extractor
-        if config.active_video_extractor == 'yt_dlp':
-            set_default_extractor('yt_dlp')
 
-        load_user_extractors(engine=yt_dlp)
+def _sync_module_globals():
+    """Mirror `ExtractorService` state onto the legacy module globals.
 
-    run_thread(import_youtube_dl, daemon=True)
-    run_thread(import_yt_dlp, daemon=True)
+    Many call-sites (and tests) still read `video.ytdl`. Update that global
+    after every load so the legacy accessor always points at the primary as
+    soon as it is available.
+    """
+    global ytdl
+    _, active_module = EXTRACTOR_SERVICE.current()
+    if active_module is not None:
+        ytdl = active_module
+        pipeline_event(
+            PipelineStage.EXTRACTOR_SELECT,
+            "ok",
+            active=EXTRACTOR_SERVICE.active_name(),
+            module=getattr(ytdl, "__name__", None),
+        )
 
 
 def set_default_extractor(extractor=None):
-    """set default extractor engine, e.g. select between youtube-dl and yt_dlp"""
-    extractor = extractor or config.active_video_extractor
+    """Select the active extractor engine via the adapter service.
 
-    global ytdl
-    ytdl = youtube_dl if extractor == 'youtube_dl' else yt_dlp
-    log('set default extractor engine to:', extractor, ytdl, log_level=2)
+    The argument is a user intent (typically `config.active_video_extractor`).
+    The adapter still enforces the primary-first policy; attempts to pin the
+    deprecated fallback while the primary is available are allowed but
+    logged so diagnostics can detect it.
+    """
+    preferred = extractor or config.active_video_extractor
+    EXTRACTOR_SERVICE.set_configured(preferred)
+    _sync_module_globals()
+
+    chosen = EXTRACTOR_SERVICE.active_name()
+    config.active_video_extractor = chosen or preferred or PRIMARY_EXTRACTOR
+    log('set default extractor engine to:', chosen, ytdl, log_level=2)
+    if chosen is None:
+        pipeline_event(
+            PipelineStage.EXTRACTOR_SELECT,
+            "fail",
+            detail="no extractor module loaded",
+            requested=preferred,
+        )
+    elif preferred and chosen != preferred:
+        pipeline_event(
+            PipelineStage.EXTRACTOR_SELECT,
+            "warn",
+            detail="user-requested extractor overridden by primary-first policy",
+            requested=preferred,
+            chosen=chosen,
+        )
 
 
 def set_interrupt_switch(ydl):
@@ -825,8 +1011,14 @@ def pre_process_hls(d):
     # X-STREAM: must have BANDWIDTH, X-MEDIA: must have TYPE, GROUP-ID, NAME=="language name"
     # tbr for videos calculated by youtube-dl == BANDWIDTH/1000
     def refresh_urls(m3u8_doc, m3u8_url):
-        # using youtube-dl internal function
-        extract_m3u8_formats = youtube_dl.extractor.common.InfoExtractor._parse_m3u8_formats
+        # Use the active extractor's HLS parser (yt_dlp primary / youtube_dl
+        # fallback). Hardcoding `youtube_dl` here used to break HLS flows
+        # when the fallback failed to import.
+        active = EXTRACTOR_SERVICE.active_module() or ytdl
+        if active is None:
+            log('refresh_urls()> no extractor available; skipping m3u8 refresh')
+            return
+        extract_m3u8_formats = active.extractor.common.InfoExtractor._parse_m3u8_formats
 
         # get formats list [{'format_id': 'hls-160000mp4a.40.2-spa', 'url': 'http://ex.com/exp=15...'}, ...]
         # what we need is format_id and url
@@ -975,21 +1167,27 @@ def post_process_hls(d):
     local_audio_m3u8_file = os.path.join(d.temp_folder, 'local_audio.m3u8')
 
     def process_file(infp, outfp):
-        cmd = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y' \
-              f' -protocol_whitelist "file,http,https,tcp,tls,crypto"  ' \
-              f'-allowed_extensions ALL ' \
-              f'-i "{infp}"'
-        fastcmd = cmd + f' -c copy "file:{outfp}"'
-        slowcmd = cmd + f' "file:{outfp}"'
+        pair = build_hls_process_command(
+            m3u8_path=infp,
+            output_file=outfp,
+            ffmpeg_path=config.ffmpeg_actual_path,
+        )
 
-        error, output = run_ffmpeg(fastcmd, d)
+        error, output = run_ffmpeg(pair.fast, d)
 
         if error:
-            # retry without "-c copy" parameter, takes longer time
-            error, output = run_ffmpeg(slowcmd, d)
+            error, output = run_ffmpeg(pair.slow, d)
 
             if error:
                 log('post_process_hls()> ffmpeg failed:', output)
+                pipeline_event(
+                    PipelineStage.FFMPEG_MERGE,
+                    "fail",
+                    phase="hls_process",
+                    input=infp,
+                    output=outfp,
+                    error=output,
+                )
                 return False
 
     process_file(local_video_m3u8_file, d.temp_file)
@@ -1008,26 +1206,21 @@ def convert_audio(d):
     :param d: DownloadItem object
     :return: bool True for success or False when failed
     """
-    # famous formats: mp3, aac, wav, ogg
     infile = d.temp_file
     outfile = d.target_file
 
-    # look for compatible formats and use "copy" parameter for faster processing
-    cmd1 = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y -i "{infile}" -acodec copy "{outfile}"'
+    pair = build_audio_convert_command(
+        input_file=infile,
+        output_file=outfile,
+        ffmpeg_path=config.ffmpeg_actual_path,
+    )
 
-    # general command, consume time
-    cmd2 = f'"{config.ffmpeg_actual_path}" -loglevel error -stats -y -i "{infile}" "{outfile}"'
-
-    # run command1
-    error, _ = run_command(cmd1, verbose=True, hide_window=True, d=d)
-
-    if error:
-        error, _ = run_command(cmd2, verbose=True, hide_window=True, d=d)
+    error, _ = run_command(pair.fast, verbose=True, hide_window=True, d=d)
 
     if error:
-        return False
-    else:
-        return True
+        error, _ = run_command(pair.slow, verbose=True, hide_window=True, d=d)
+
+    return not error
 
 
 # parse m3u8 lines
@@ -1428,11 +1621,28 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
 
     url = url or info.get('url') or info.get('webpage_url')
 
-    # we import youtube-dl in separate thread to minimize startup time, will wait in loop until it gets imported
-    if ytdl is None:
+    # extractor is loaded in background threads for GUI startup speed — wait
+    # on the adapter service for a deterministic ready signal instead of a
+    # raw module-global spin loop.
+    if EXTRACTOR_SERVICE.active_module() is None:
         log(f'loading {config.active_video_extractor} ...')
-        while not ytdl:
-            time.sleep(1)  # wait until module gets imported
+        pipeline_event(PipelineStage.EXTRACTOR_READY, "start", configured=config.active_video_extractor)
+        ready = EXTRACTOR_SERVICE.wait_until_ready(timeout=45.0)
+        _sync_module_globals()
+        if not ready:
+            pipeline_event(
+                PipelineStage.EXTRACTOR_READY,
+                "fail",
+                detail="extractor did not initialize within 45s",
+                configured=config.active_video_extractor,
+            )
+            return None
+        pipeline_event(
+            PipelineStage.EXTRACTOR_READY,
+            "ok",
+            active=EXTRACTOR_SERVICE.active_name(),
+            is_primary=EXTRACTOR_SERVICE.is_primary_active(),
+        )
 
     # get global youtube_dl options
     options = get_ytdl_options()
@@ -1448,7 +1658,13 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
 
     if not info:
         # fetch info by youtube-dl
-        info = ydl.extract_info(url, download=False, process=False)
+        try:
+            info = ydl.extract_info(url, download=False, process=False)
+        except Exception as e:
+            pipeline_exception(PipelineStage.METADATA_FETCH, e, url=url, phase="initial")
+            log('video.get_media_info()> extract_info failed:', e, log_level=2)
+            return None
+
     try:
         # get media type, refer to youtube-dl/extractor/generic.py
         # possible values: playlist, multi_video, url, and url_transparent
@@ -1463,13 +1679,15 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
         # don't process direct links, refer to youtube-dl/extractor/generic.py
         if info.get('direct'):
             log('controller._create_video_playlist()> No streams found')
+            pipeline_event(PipelineStage.METADATA_FETCH, "skip", detail="direct link", url=url)
             info = None
 
         # process info, avoid playlist / multi_video -------------------------------------------------
         if _type not in ('playlist', 'multi_video') and 'entries' not in info:
             info = ydl.process_ie_result(info, download=False)
     except Exception as e:
-        log('video.get_media_info() error:', e, log_level=3)
+        pipeline_exception(PipelineStage.METADATA_FETCH, e, url=url, phase="process_ie")
+        log('video.get_media_info() error:', e, log_level=2)
 
     return info
 
@@ -1477,9 +1695,9 @@ def get_media_info(url=None, info=None, ytdloptions=None, interrupt=False):
 def process_video(vid):
     """process video info and refresh Video object properties,
     typically required when video is a part of unprocessed video playlist"""
+    pipeline_event(PipelineStage.METADATA_FETCH, "start", url=getattr(vid, "url", ""))
     try:
         vid.busy = True  # busy flag will be used to show progress bar or a busy mouse cursor
-        # vid_info = self._process_video_info(vid.vid_info)
         vid_info = get_media_info(info=vid.vid_info)
 
         if vid_info:
@@ -1490,17 +1708,27 @@ def process_video(vid):
 
             log('_process_video_info()> processed url:', vid.url, log_level=3)
             vid.processed = True
+            pipeline_event(
+                PipelineStage.METADATA_FETCH,
+                "ok",
+                url=vid.url,
+                streams=len(getattr(vid, "all_streams", []) or []),
+            )
         else:
             log('_process_video()> Failed,  url:', vid.url, log_level=3)
+            pipeline_event(
+                PipelineStage.METADATA_FETCH,
+                "fail",
+                detail="get_media_info returned None",
+                url=vid.url,
+            )
     except Exception as e:
+        pipeline_exception(PipelineStage.METADATA_FETCH, e, url=getattr(vid, "url", ""))
         log('_process_video()> error:', e)
         if config.test_mode:
             raise e
     finally:
         vid.busy = False
-
-
-
 
 
 

@@ -4898,9 +4898,9 @@ class MainWindow(IView):
     def show_about_notes(self):
         res = self.popup(about_notes, buttons=['Home', 'Help!', 'Close'], title='About FireDM')
         if res == 'Help!':
-            open_webpage('https://github.com/firedm/FireDM/blob/master/docs/user_guide.md')
+            open_webpage('https://github.com/GurucharanSavanth/FireDM/blob/main/docs/user_guide.md')
         elif res == 'Home':
-            open_webpage('https://github.com/firedm/FireDM')
+            open_webpage('https://github.com/GurucharanSavanth/FireDM')
 
         free_callback(self.show_about_notes)
 
@@ -5168,4 +5168,3 @@ if __name__ == '__main__':
         controller.run()
     except Exception as e:
         print('error:', e)
-
