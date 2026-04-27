@@ -171,6 +171,15 @@ def download_thumbnail(d):
     try:
         # download thumbnail
         if d.status == Status.completed and d.thumbnail_url:
+            # SECURITY: hostile metadata can set thumbnail_url to a non-http
+            # scheme (e.g. file:///c:/users/victim/secret.txt). Without this
+            # check the URL would be passed to pycurl unchanged and the
+            # contents written next to the video file as <video>.png.
+            # See tests/test_security.py F-HIGH-5.
+            from .utils import is_allowed_network_url
+            if not is_allowed_network_url(d.thumbnail_url):
+                log('download_thumbnail()> refusing non-http(s) thumbnail URL', log_level=2)
+                return
             fp = os.path.splitext(d.target_file)[0] + '.png'
             download(d.thumbnail_url, fp=fp, decode=False)
 

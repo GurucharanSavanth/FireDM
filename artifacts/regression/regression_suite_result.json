@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-04-25T14:12:51",
+  "timestamp": "2026-04-26T09:23:18",
   "exit_code": 0,
-  "duration_seconds": 3.22,
+  "duration_seconds": 1.72,
   "targets": [
     "tests/test_extractor_service.py",
     "tests/test_extractor_default_selection.py",
@@ -18,9 +18,9 @@
     "tests/test_hls_parser_compat.py",
     "tests/test_pipeline_logger_redaction.py"
   ],
-  "pytest_summary_line": "71 passed in 2.02s",
+  "pytest_summary_line": "71 passed in 1.15s",
   "stdout_tail": [
     ".......................................................................  [100%]",
-    "71 passed in 2.02s"
+    "71 passed in 1.15s"
   ]
 }

@@ -6,6 +6,7 @@
     :copyright: (c) 2019-2021 by Mahmoud Elshahat.
     :license: GNU LGPLv3, see LICENSE for more details.
 """
+import ast
 import datetime
 import os
 import io
@@ -27,6 +28,29 @@ import ntpath
 import urllib.request
 import platform
 import subprocess
+from urllib.parse import urlsplit
+
+# Protocols that FireDM is willing to talk over its pycurl-backed downloader.
+# libcurl is built with file/ftp/dict/gopher/smb/telnet/tftp support; without
+# this allowlist any of those schemes can be smuggled into utils.download() /
+# utils.get_headers() / controller.download_thumbnail() callers (CRITICAL info
+# disclosure / SSRF -- see tests/test_security.py F-CRIT-2 / F-HIGH-5).
+ALLOWED_NETWORK_SCHEMES = ("http", "https")
+
+
+def is_allowed_network_url(url):
+    """Return True iff `url` uses a scheme FireDM is willing to fetch.
+
+    Empty / non-string / scheme-less inputs are rejected. Callers should treat
+    a False result as 'do not invoke pycurl with this URL'.
+    """
+    if not isinstance(url, str) or not url:
+        return False
+    try:
+        scheme = urlsplit(url).scheme.lower()
+    except ValueError:
+        return False
+    return scheme in ALLOWED_NETWORK_SCHEMES
 
 # 3rd party
 try:
@@ -124,6 +148,15 @@ def set_curl_options(c, http_headers=None):
     c.setopt(pycurl.FOLLOWLOCATION, 1)
     c.setopt(pycurl.MAXREDIRS, 10)
 
+    # Restrict to HTTP/HTTPS so libcurl refuses file://, ftp://, dict://,
+    # gopher://, smb://, telnet://, tftp:// even if the URL or a redirect
+    # tries to escalate. Without this allowlist a single malicious thumbnail
+    # URL or a hostile redirect chain can read local files / hit internal
+    # services. See tests/test_security.py F-CRIT-2 / F-HIGH-5.
+    _http_only = pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS
+    c.setopt(pycurl.PROTOCOLS, _http_only)
+    c.setopt(pycurl.REDIR_PROTOCOLS, _http_only)
+
     c.setopt(pycurl.NOSIGNAL, 1)  # option required for multithreading safety
     c.setopt(pycurl.NOPROGRESS, 1)
     c.setopt(pycurl.CAINFO, certifi.where())  # for https sites and ssl cert handling
@@ -167,6 +200,10 @@ def get_headers(url, verbose=False, http_headers=None, seg_range=None):
     """return dictionary of headers"""
 
     log('get_headers()> getting headers for:', url, log_level=3)
+
+    if not is_allowed_network_url(url):
+        log('get_headers()> refusing non-http(s) URL scheme', log_level=2)
+        return {'status_code': 0, 'eff_url': url}
 
     curl_headers = {}
 
@@ -247,6 +284,10 @@ def download(url, fp=None, verbose=True, http_headers=None, decode=True, return_
 
     if not url:
         log('download()> url not valid:', url)
+        return None
+
+    if not is_allowed_network_url(url):
+        log('download()> refusing non-http(s) URL scheme', log_level=2)
         return None
 
     if verbose:
@@ -1193,17 +1234,37 @@ def get_pkg_version(pkg):
     version = ''
 
     # read version.py file
+    # SECURITY: never `exec()` the file -- a writable third-party site-packages
+    # entry would otherwise hand ACE to anyone able to drop a version.py.
+    # Parse the AST and only accept a literal `__version__ = "..."` assignment.
     try:
-        version_module = {}
         fp = os.path.join(pkg_path, 'version.py')
-        with open(fp) as f:
+        with open(fp, encoding='utf-8') as f:
             txt = f.read()
-            exec(txt, version_module)  # then we can use it as: version_module['__version__']
-            version = version_module.get('__version__')
-            if not version:
-                match = re.search(r'_*version_*=[\'\"](.*?)[\'\"]', txt.replace(' ', ''), re.IGNORECASE)
+        try:
+            tree = ast.parse(txt)
+        except SyntaxError:
+            tree = None
+        if tree is not None:
+            for node in tree.body:
+                if not isinstance(node, ast.Assign):
+                    continue
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == '__version__':
+                        try:
+                            value = ast.literal_eval(node.value)
+                        except (ValueError, SyntaxError):
+                            value = None
+                        if isinstance(value, str):
+                            version = value
+                            break
+                if version:
+                    break
+        if not version:
+            match = re.search(r'_*version_*=[\'\"](.*?)[\'\"]', txt.replace(' ', ''), re.IGNORECASE)
+            if match:
                 version = match.groups()[0]
-    except:
+    except Exception:
         pass
 
     if not version:

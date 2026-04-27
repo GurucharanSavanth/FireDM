@@ -1,0 +1,108 @@
+usage: 
+firedm [OPTIONS] URL1 URL2 URL3 
+example: firedm "https://somesite.com/somevideo" "https://somesite.com/anothervideo"
+Note: to run firedm in GUI(Graphical User Interface) mode, use "--gui" option along with other arguments, or start firedm without any arguments.
+firedm: error: unrecognized arguments: --this-is-not-an-option=evil
+
+==============================================================================
+CAND-01: tool_discovery search_dirs precedence over shutil.which
+==============================================================================
+resolved path     : C:\Users\SavanthGC\AppData\Local\Temp\tmpm4z1tl98\.firedm\ffmpeg.exe
+planted path      : C:\Users\SAVANT~1\AppData\Local\Temp\tmpm4z1tl98\.firedm\ffmpeg.exe
+path_lookup called: None
+search_dirs precedence over PATH: True
+Trust evaluation : write to %APPDATA%\.firedm requires user-level filesystem rights; same principal that runs FireDM.
+Disposition       : REJECTED_NO_SECURITY_BOUNDARY
+
+==============================================================================
+CAND-02: ffmpeg argv leading-dash via metadata filename
+==============================================================================
+validate_file_name('-evil-payload') -> '-evil-payload'
+fast cmd            : "C:\bin\ffmpeg.exe" -loglevel error -stats -y -i "C:\Users\Foo\Downloads\-evil-payload.mp4" -i "C:\Users\Foo\Downloads\audio.m4a" -c copy "C:\Users\Foo\Downloads\out.mp4"
+argv (production POSIX shlex): ['C:\\bin\\ffmpeg.exe', '-loglevel', 'error', '-stats', '-y', '-i', 'C:\\Users\\Foo\\Downloads\\-evil-payload.mp4', '-i', 'C:\\Users\\Foo\\Downloads\\audio.m4a', '-c', 'copy', 'C:\\Users\\Foo\\Downloads\\out.mp4']
+argv tokens beginning with '-' that are NOT known flags: []
+path argv tokens   : ['C:\\bin\\ffmpeg.exe', 'C:\\Users\\Foo\\Downloads\\-evil-payload.mp4', 'C:\\Users\\Foo\\Downloads\\audio.m4a', 'C:\\Users\\Foo\\Downloads\\out.mp4']
+path tokens beginning with '-': []
+Disposition       : REJECTED_EXISTING_MITIGATION
+
+==============================================================================
+CAND-03: argv quote escape via embedded `"` in path
+==============================================================================
+validate_file_name('a"b.mp4') -> 'ab.mp4'
+_quote('has"quote.mp4') -> '"has\\"quote.mp4"'
+shlex.split posix tokens: ['has"quote.mp4']
+single token preserved : True
+Disposition       : REJECTED_EXISTING_MITIGATION
+
+==============================================================================
+CAND-04: m3u8 skd:// -> https:// URL substitution
+==============================================================================
+segment count     : 1
+segment URL       : https://attacker.example/seg1.ts
+key URL           : https://attacker.example/key
+segment URL passes is_allowed_network_url : True
+key URL passes is_allowed_network_url     : True
+Disposition       : REJECTED_NO_SECURITY_BOUNDARY
+
+==============================================================================
+CAND-05: sys.path[0:2] introspection after firedm.config import
+==============================================================================
+sys.path[0]: G:\Personal Builds\Revive-FireDM\FireDM\firedm
+sys.path[1]: G:\Personal Builds\Revive-FireDM\FireDM
+package_dir       : G:\Personal Builds\Revive-FireDM\FireDM\firedm
+repo_dir          : G:\Personal Builds\Revive-FireDM\FireDM
+Trust evaluation : both entries are inside the repo / package tree (write access there = code-level compromise already).
+Disposition       : REJECTED_NO_SECURITY_BOUNDARY
+
+==============================================================================
+CAND-07: shlex.split('xdg-open "<path with embedded quote>"')
+==============================================================================
+raw cmd  : 'xdg-open "/home/user/My"Quote/Downloads"'
+shlex raised ValueError: No closing quotation
+open_folder()/open_file() wrap subprocess.Popen in try/except (utils.py:767-768, :725-728), so the ValueError is logged and no process is spawned. No shell evaluation occurs either way.
+outcome           : ValueError -> caught -> no spawn -> no shell evaluation
+Disposition       : REJECTED_EXISTING_MITIGATION
+
+==============================================================================
+CAND-08: MediaPlaylist.create_local_m3u8_doc rewrites URIs to local paths
+==============================================================================
+local m3u8 produced for ffmpeg:
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-PLAYLIST-TYPE:None
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:6.0,
+C:/Users/SAVANT~1/AppData/Local/Temp/tmpelk86eux/video_seg_1.ts
+#EXT-X-ENDLIST
+local m3u8 still contains 'file:///etc/passwd' : False
+Disposition       : REJECTED_EXISTING_MITIGATION
+
+==============================================================================
+CAND-09: setting.cfg accepts ffmpeg_actual_path (intended user feature)
+==============================================================================
+config.ffmpeg_actual_path -> C:\Users\SAVANT~1\AppData\Local\Temp\tmpculaji09\evil-ffmpeg.exe
+Trust evaluation : setting.cfg is the user's own configuration. Choosing the ffmpeg binary is a feature.
+Disposition       : REJECTED_NO_SECURITY_BOUNDARY
+
+==============================================================================
+CAND-14: argparse Namespace bounds keys written into config.__dict__
+==============================================================================
+argparse rejected unknown option (exit 2)
+keys for --proxy only      : ['proxy', 'url']
+Disposition       : REJECTED_NO_SECURITY_BOUNDARY
+
+==============================================================================
+CAND-15: simpledownload runtime callers
+==============================================================================
+runtime (firedm/) callers: []
+Disposition       : REJECTED_OUT_OF_SCOPE
+
+==============================================================================
+CAND-16: load_progress_info accepts attacker-named segment files
+==============================================================================
+d.segments[0].name -> C:\Users\SAVANT~1\AppData\Local\Temp\tmpsmw5zmdn\escape_target.bin
+Trust evaluation : poisoning requires write access to the user's own download/temp folder = same trust principal.
+Disposition       : REJECTED_NO_SECURITY_BOUNDARY
+
+All reproductions complete.

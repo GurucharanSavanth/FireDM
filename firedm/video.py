@@ -790,6 +790,15 @@ def load_user_extractors(engine=youtube_dl):
         # settings folder hasn't been resolved yet (headless tool / early
         # startup). Nothing to load.
         return
+    # SECURITY: the loader exec()s every .py via importlib.exec_module(). Any
+    # actor able to write to the user's settings dir would otherwise gain
+    # ACE inside FireDM on next launch. Gate behind an explicit opt-in flag
+    # (default False). See tests/test_security.py F-HIGH-6.
+    if not getattr(config, 'allow_user_extractors', False):
+        log('load_user_extractors()> skipping: config.allow_user_extractors '
+            'is False (set it to True only if you trust every .py in '
+            'extractors/)', log_level=2)
+        return
     extractors_folder = os.path.join(config.sett_folder, 'extractors')
     if not os.path.isdir(extractors_folder):
         return

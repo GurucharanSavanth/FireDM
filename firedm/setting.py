@@ -59,9 +59,19 @@ def load_d_map():
             # expecting a list of dictionaries
             data = json.load(f)
 
+        # SECURITY: refuse to restore attributes that, when paired with the
+        # status machine, give the disk file ACE / privilege escalation.
+        # `on_completion_command` is invoked via run_command() in
+        # `controller._post_download()`; `shutdown_pc` triggers a system
+        # shutdown without confirmation. Neither is part of the persisted
+        # `saved_properties` schema -- a hostile downloads.dat that adds them
+        # is the attack vector. See tests/test_security.py F-HIGH-4.
+        UNSAFE_DOWNLOAD_KEYS = ('on_completion_command', 'shutdown_pc')
+
         # converting data to a map of uid: ObservableDownloadItem() objects
         for uid, d_dict in data.items():  # {'uid': d_dict, 'uid2': d_dict2, ...}
-            d = update_object(model.ObservableDownloadItem(), d_dict)
+            sanitized_dict = {k: v for k, v in d_dict.items() if k not in UNSAFE_DOWNLOAD_KEYS}
+            d = update_object(model.ObservableDownloadItem(), sanitized_dict)
             if d:  # if update_object() returned an updated object not None
                 d.uid = uid
                 d_map[uid] = d
@@ -157,8 +167,24 @@ def load_setting():
     # log('Load Application setting from', config.sett_folder)
     settings = get_user_settings()
 
+    # SECURITY: filter against the declared schema so a poisoned setting.cfg
+    # cannot inject NEW attributes into config (e.g. a `log_popup_callback`
+    # function reference) or override trusted constants such as APP_URL /
+    # LATEST_RELEASE_URL / FFMPEG_DOWNLOAD_HELP_URL. Only keys explicitly
+    # declared by `config.settings_keys` are accepted on disk.
+    # See tests/test_security.py F-CRIT-3.
+    allowed_keys = set(config.settings_keys)
+    safe_settings = {k: v for k, v in settings.items() if k in allowed_keys}
+    dropped = [k for k in settings if k not in allowed_keys]
+    if dropped:
+        log(
+            'load_setting()> ignoring unknown / unsafe keys in setting.cfg:',
+            dropped,
+            log_level=2,
+        )
+
     # update config module
-    config.__dict__.update(settings)
+    config.__dict__.update(safe_settings)
 
 
 def save_setting():
