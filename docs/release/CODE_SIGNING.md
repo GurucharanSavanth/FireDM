@@ -22,6 +22,10 @@ Unsigned artifact implications:
 - Windows SmartScreen and AV products may warn on first-run installer artifacts.
 - Release notes must mark installer artifacts unsigned.
 - Maintainers should sign both installer EXE and, if possible, packaged application EXEs before public release.
+- `scripts/release/github_release.py` refuses stable releases when installer
+  artifacts are unsigned.
+- `.github/workflows/draft-release.yml` sets `FIREDM_REQUIRE_SIGNING=1` for
+  build-ID tag runs and stable manual runs.
 
 Required future inputs:
 - code signing certificate

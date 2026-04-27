@@ -36,24 +36,27 @@ def zip_directory(source: Path, destination: Path, root_name: str | None = None)
             zf.write(path, rel.as_posix())
 
 
-def copy_payload(arch: str) -> Path:
+def copy_payload(arch: str, build_id: str, allow_overwrite: bool = False) -> Path:
     if arch != "x64":
         raise SystemExit(f"{arch} payload build is blocked in this checkout; only x64 is implemented.")
 
-    run_checked(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(repo_path("scripts", "windows-build.ps1")),
-            "-SkipTests",
-            "-SkipLint",
-            "-SkipPythonPackage",
-            "-SkipTwineCheck",
-        ]
-    )
+    build_args = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(repo_path("scripts", "windows-build.ps1")),
+        "-SkipTests",
+        "-SkipLint",
+        "-SkipPythonPackage",
+        "-SkipTwineCheck",
+        "-BuildId",
+        build_id,
+    ]
+    if allow_overwrite:
+        build_args.append("-AllowOverwrite")
+    run_checked(build_args)
 
     source = repo_path("dist", "FireDM")
     if not (source / "firedm.exe").is_file() or not (source / "FireDM-GUI.exe").is_file():
@@ -84,7 +87,7 @@ def add_portable_readme(payload: Path, version: str, arch: str) -> None:
 
 def build_payload(args: argparse.Namespace) -> dict:
     version = read_version()
-    payload = copy_payload(args.arch)
+    payload = copy_payload(args.arch, args.build_id, args.allow_overwrite)
     add_portable_readme(payload, version, args.arch)
 
     files = []
@@ -98,7 +101,7 @@ def build_payload(args: argparse.Namespace) -> dict:
                 }
             )
 
-    metadata = build_metadata(args.arch, args.channel)
+    metadata = build_metadata(args.arch, args.channel, args.build_id)
     metadata.update(
         {
             "kind": "payload",
@@ -115,8 +118,10 @@ def build_payload(args: argparse.Namespace) -> dict:
     write_json(payload_manifest_path(args.arch), metadata)
 
     portable_dir = ensure_dir(PORTABLE_DIR)
-    portable_zip = portable_dir / portable_name(version, args.arch)
+    portable_zip = portable_dir / portable_name(args.build_id, args.channel, args.arch)
     if portable_zip.exists():
+        if not args.allow_overwrite:
+            raise SystemExit(f"Portable ZIP already exists: {portable_zip}")
         portable_zip.unlink()
     zip_directory(payload, portable_zip)
 
@@ -124,6 +129,7 @@ def build_payload(args: argparse.Namespace) -> dict:
     write_json(
         BUILD_DIR / "last-payload.json",
         {
+            "buildId": args.build_id,
             "payload": str(payload),
             "manifest": str(payload_manifest_path(args.arch)),
             "portableZip": str(portable_zip),
@@ -139,6 +145,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build FireDM Windows architecture payload.")
     parser.add_argument("--arch", choices=["x64", "x86", "arm64"], required=True)
     parser.add_argument("--channel", default="dev")
+    parser.add_argument("--build-id", required=True)
+    parser.add_argument("--allow-overwrite", action="store_true")
     args = parser.parse_args()
     require_supported_arch(parser, args.arch)
     build_payload(args)

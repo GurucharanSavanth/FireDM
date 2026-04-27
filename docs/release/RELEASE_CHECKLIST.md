@@ -12,7 +12,7 @@
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\release\validate_payload.py --arch x64
-.\.venv\Scripts\python.exe scripts\release\validate_installer.py --artifact dist\installers\FireDM_Setup_<version>_dev_win_x64.exe --test-repair --test-uninstall --test-upgrade --test-downgrade-block
+.\.venv\Scripts\python.exe scripts\release\validate_installer.py --artifact dist\installers\FireDM_Setup_<build_id>_dev_win_x64.exe --test-repair --test-uninstall --test-upgrade --test-downgrade-block
 .\.venv\Scripts\python.exe scripts\release\smoke_installed_gui.py --install-root dist\payloads\win-x64\FireDM --timeout 20 --headless-safe --no-network
 ```
 
@@ -27,11 +27,17 @@
 
 ## Release Artifacts
 
-- `dist\installers\FireDM_Setup_<version>_dev_win_x64.exe`
-- `dist\portable\FireDM_<version>_win_x64_portable.zip`
-- `dist\release-manifest.json`
-- `dist\checksums\SHA256SUMS.txt`
-- `dist\licenses\license-inventory.json`
+- `dist\installers\FireDM_Setup_<build_id>_dev_win_x64.exe`
+- `dist\portable\FireDM_<build_id>_dev_win_x64_portable.zip`
+- `dist\FireDM_release_manifest_<build_id>.json`
+- `dist\checksums\SHA256SUMS_<build_id>.txt`
+- `dist\licenses\license-inventory_<build_id>.json`
+
+Dry-run GitHub release before publishing:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\release\github_release.py --manifest dist\release-manifest.json
+```
 
 Signing:
 - dev builds may be unsigned

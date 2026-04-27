@@ -3,21 +3,48 @@ name: draft-release
 on:
   push:
     tags:
-      - "v*"
+      - "build-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_V*"
   workflow_dispatch:
     inputs:
       channel:
-        description: "Build channel. Use dev for unsigned local-style drafts; stable requires signing."
+        description: "Build channel. Stable requires signing."
         required: true
         default: "dev"
         type: choice
         options:
           - dev
+          - beta
           - stable
-      release_tag:
-        description: "Optional release tag for manual runs. Defaults to v<version>-<channel>."
+      arch:
+        description: "Windows architecture lane. Only x64 is implemented."
+        required: true
+        default: "x64"
+        type: choice
+        options:
+          - x64
+      build_id:
+        description: "Optional explicit build ID, e.g. 20260427_V1."
         required: false
         type: string
+      date:
+        description: "Optional build date override, e.g. 20260427."
+        required: false
+        type: string
+      publish_release:
+        description: "Create/upload the GitHub draft release. False runs dry-run only."
+        required: true
+        default: false
+        type: boolean
+      draft:
+        description: "Create release as draft."
+        required: true
+        default: true
+        type: boolean
+      prerelease:
+        description: "Mark release as prerelease. Keep true for dev/beta."
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -29,6 +56,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v6
@@ -73,60 +102,86 @@ jobs:
       - name: Build Windows installer lane
         shell: pwsh
         run: |
-          $channel = "${{ github.event.inputs.channel }}"
+          $channel = "${{ inputs.channel }}"
+          $arch = "${{ inputs.arch }}"
+          $buildId = "${{ inputs.build_id }}"
+          $date = "${{ inputs.date }}"
           if ([string]::IsNullOrWhiteSpace($channel)) {
             $channel = "stable"
           }
+          if ([string]::IsNullOrWhiteSpace($arch)) {
+            $arch = "x64"
+          }
           if ($env:GITHUB_REF_TYPE -eq "tag") {
             $channel = "stable"
+            $buildId = $env:GITHUB_REF_NAME -replace '^build-', ''
           }
           if ($channel -eq "stable") {
             $env:FIREDM_REQUIRE_SIGNING = "1"
             "FIREDM_REQUIRE_SIGNING=1" >> $env:GITHUB_ENV
           }
-          python scripts\release\build_windows.py --arch x64 --channel $channel
-          $version = python -c "from firedm.version import __version__; print(__version__)"
-          "version=$version" >> $env:GITHUB_ENV
-          "channel=$channel" >> $env:GITHUB_ENV
-          if ($env:GITHUB_REF_TYPE -eq "tag") {
-            "tag=$env:GITHUB_REF_NAME" >> $env:GITHUB_ENV
-          } elseif (-not [string]::IsNullOrWhiteSpace("${{ github.event.inputs.release_tag }}")) {
-            "tag=${{ github.event.inputs.release_tag }}" >> $env:GITHUB_ENV
-          } else {
-            "tag=v$version-$channel" >> $env:GITHUB_ENV
+
+          $args = @("scripts\release\build_windows.py", "--arch", $arch, "--channel", $channel)
+          if (-not [string]::IsNullOrWhiteSpace($buildId)) {
+            $args += @("--build-id", $buildId)
+            if ($env:GITHUB_REF_TYPE -eq "tag") {
+              $args += "--allow-overwrite"
+            }
+          } elseif (-not [string]::IsNullOrWhiteSpace($date)) {
+            $args += @("--date", $date)
           }
+          python @args
+
+          $manifest = Get-Content "dist\release-manifest.json" | ConvertFrom-Json
+          if (-not $manifest.build_id) {
+            throw "release manifest missing build_id"
+          }
+          foreach ($artifact in $manifest.artifacts) {
+            if ($artifact.path -notmatch [regex]::Escape($manifest.build_id)) {
+              throw "artifact path missing build_id: $($artifact.path)"
+            }
+          }
+          "version=$($manifest.version)" >> $env:GITHUB_ENV
+          "channel=$($manifest.channel)" >> $env:GITHUB_ENV
+          "build_id=$($manifest.build_id)" >> $env:GITHUB_ENV
+          "tag=$($manifest.tag_name)" >> $env:GITHUB_ENV
+          "release_name=$($manifest.release_name)" >> $env:GITHUB_ENV
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
-          name: FireDM-Windows-${{ env.version }}
+          name: FireDM-Windows-${{ env.build_id }}
           path: |
-            dist/installers/*.exe
-            dist/installers/*.manifest.json
-            dist/portable/*.zip
-            dist/checksums/SHA256SUMS.txt
-            dist/release-manifest.json
-            dist/release-body.md
-            dist/licenses/license-inventory.json
+            dist/installers/*${{ env.build_id }}*.exe
+            dist/installers/*${{ env.build_id }}*.manifest.json
+            dist/portable/*${{ env.build_id }}*.zip
+            dist/checksums/SHA256SUMS_${{ env.build_id }}.txt
+            dist/FireDM_release_manifest_${{ env.build_id }}.json
+            dist/FireDM_release_notes_${{ env.build_id }}.md
+            dist/licenses/license-inventory_${{ env.build_id }}.json
           if-no-files-found: error
 
-      - name: Create draft GitHub release
+      - name: Dry-run or publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $installer = "dist\installers\FireDM_Setup_$($env:version)_$($env:channel)_win_x64.exe"
-          $installerManifest = "dist\installers\FireDM_Setup_$($env:version)_$($env:channel)_win_x64.manifest.json"
-          $portable = "dist\portable\FireDM_$($env:version)_win_x64_portable.zip"
-          gh release create $env:tag `
-            "$installer#FireDM Windows x64 installer" `
-            "$installerManifest#Installer manifest" `
-            "$portable#FireDM Windows x64 portable zip" `
-            "dist\checksums\SHA256SUMS.txt#SHA256 checksums" `
-            "dist\release-manifest.json#Release manifest" `
-            "dist\licenses\license-inventory.json#Bundled component inventory" `
-            --draft `
-            --title "FireDM version $env:version" `
-            --notes-file "dist\release-body.md" `
-            --target $env:GITHUB_SHA `
-            --repo $env:GITHUB_REPOSITORY
+          $releaseArgs = @(
+            "scripts\release\github_release.py",
+            "--manifest",
+            "dist\FireDM_release_manifest_$($env:build_id).json",
+            "--repo",
+            $env:GITHUB_REPOSITORY
+          )
+          if ("${{ inputs.draft }}" -eq "false") {
+            $releaseArgs += "--no-draft"
+          }
+          if ("${{ inputs.prerelease }}" -eq "false" -or $env:channel -eq "stable") {
+            $releaseArgs += "--no-prerelease"
+          } else {
+            $releaseArgs += "--prerelease"
+          }
+          if ($env:GITHUB_REF_TYPE -eq "tag" -or "${{ inputs.publish_release }}" -eq "true") {
+            $releaseArgs += "--publish"
+          }
+          python @releaseArgs

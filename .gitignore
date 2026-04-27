@@ -85,6 +85,8 @@ artifacts/full_codebase_repair/pyinstaller-dist/
 !artifacts/windows_installer_phase2/*.md
 !artifacts/final_wrapup/
 !artifacts/final_wrapup/*.md
+!artifacts/build_release_update/
+!artifacts/build_release_update/*.md
 !icons/
 !icons/48x48.png
 !icons/48_32_16.ico

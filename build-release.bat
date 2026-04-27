@@ -4,7 +4,24 @@ setlocal
 cd /d "%~dp0"
 
 set "CHANNEL=%~1"
-if "%CHANNEL%"=="" set "CHANNEL=dev"
+set "EXTRA_ARGS="
+if "%CHANNEL%"=="" (
+    set "CHANNEL=dev"
+) else (
+    if "%CHANNEL:~0,2%"=="--" (
+        set "CHANNEL=dev"
+    ) else (
+        shift /1
+    )
+)
+
+:collect_args
+if "%~1"=="" goto args_done
+set "EXTRA_ARGS=%EXTRA_ARGS% %1"
+shift /1
+goto collect_args
+
+:args_done
 
 set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
 if not exist "%PYTHON_EXE%" (
@@ -18,7 +35,7 @@ if not exist "%PYTHON_EXE%" (
 
 echo Building FireDM Windows installer release...
 echo Channel: %CHANNEL%
-"%PYTHON_EXE%" "%~dp0scripts\release\build_windows.py" --arch x64 --channel "%CHANNEL%"
+"%PYTHON_EXE%" "%~dp0scripts\release\build_windows.py" --arch x64 --channel "%CHANNEL%" %EXTRA_ARGS%
 set "EXIT_CODE=%ERRORLEVEL%"
 
 echo.

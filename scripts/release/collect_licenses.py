@@ -4,7 +4,8 @@ import argparse
 import importlib.metadata as metadata
 import platform
 
-from common import LICENSES_DIR, ensure_dir, read_version, write_json
+from build_id import build_release_name, build_tag_name, parse_build_id
+from common import LICENSES_DIR, ensure_dir, license_inventory_name, read_version, write_json
 
 COMPONENTS = [
     "FireDM",
@@ -45,7 +46,9 @@ def component_record(name: str) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Collect bundled component license metadata.")
-    parser.parse_args()
+    parser.add_argument("--build-id", required=True)
+    args = parser.parse_args()
+    build_parts = parse_build_id(args.build_id)
     ensure_dir(LICENSES_DIR)
     records = [component_record(name) for name in COMPONENTS]
     records.extend(
@@ -68,9 +71,19 @@ def main() -> None:
             },
         ]
     )
-    payload = {"projectVersion": read_version(), "components": records}
+    payload = {
+        "projectVersion": read_version(),
+        "build_id": args.build_id,
+        "build_date": build_parts.date,
+        "build_index": build_parts.index,
+        "tag_name": build_tag_name(args.build_id),
+        "release_name": build_release_name(args.build_id),
+        "components": records,
+    }
+    canonical = LICENSES_DIR / license_inventory_name(args.build_id)
+    write_json(canonical, payload)
     write_json(LICENSES_DIR / "license-inventory.json", payload)
-    print(f"License inventory written: {LICENSES_DIR / 'license-inventory.json'}")
+    print(f"License inventory written: {canonical}")
 
 
 if __name__ == "__main__":

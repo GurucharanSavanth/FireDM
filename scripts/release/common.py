@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from build_id import build_release_name, build_tag_name, parse_build_id
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DIST_DIR = REPO_ROOT / "dist"
 PAYLOADS_DIR = DIST_DIR / "payloads"
@@ -128,9 +130,15 @@ def require_supported_arch(parser: argparse.ArgumentParser, arch: str) -> str:
         parser.exit(2, f"{parser.prog}: error: {exc}\n")
 
 
-def build_metadata(arch: str, channel: str) -> dict[str, Any]:
+def build_metadata(arch: str, channel: str, build_id: str) -> dict[str, Any]:
+    build_parts = parse_build_id(build_id)
     return {
         "version": read_version(),
+        "build_id": build_id,
+        "build_date": build_parts.date,
+        "build_index": build_parts.index,
+        "tag_name": build_tag_name(build_id),
+        "release_name": build_release_name(build_id),
         "channel": channel,
         "arch": arch,
         "payloadArch": arch_to_payload(arch),
@@ -161,13 +169,33 @@ def installer_manifest_name() -> str:
     return "installer-manifest.json"
 
 
-def payload_zip_name(version: str, arch: str) -> str:
-    return f"FireDM_{version}_win_{arch}_payload.zip"
+def payload_zip_name(build_id: str, channel: str, arch: str) -> str:
+    return f"FireDM_{build_id}_{channel}_win_{arch}_payload.zip"
 
 
-def installer_name(version: str, channel: str, arch: str) -> str:
-    return f"FireDM_Setup_{version}_{channel}_win_{arch}.exe"
+def installer_name(build_id: str, channel: str, arch: str) -> str:
+    return f"FireDM_Setup_{build_id}_{channel}_win_{arch}.exe"
 
 
-def portable_name(version: str, arch: str) -> str:
-    return f"FireDM_{version}_win_{arch}_portable.zip"
+def portable_name(build_id: str, channel: str, arch: str) -> str:
+    return f"FireDM_{build_id}_{channel}_win_{arch}_portable.zip"
+
+
+def installer_manifest_file_name(build_id: str, channel: str, arch: str) -> str:
+    return f"FireDM_Setup_{build_id}_{channel}_win_{arch}.manifest.json"
+
+
+def release_manifest_name(build_id: str) -> str:
+    return f"FireDM_release_manifest_{build_id}.json"
+
+
+def checksum_file_name(build_id: str) -> str:
+    return f"SHA256SUMS_{build_id}.txt"
+
+
+def license_inventory_name(build_id: str) -> str:
+    return f"license-inventory_{build_id}.json"
+
+
+def release_notes_name(build_id: str) -> str:
+    return f"FireDM_release_notes_{build_id}.md"

@@ -3,13 +3,13 @@
 The portable package is produced by:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\release\build_payload.py --arch x64 --channel dev
+.\.venv\Scripts\python.exe scripts\release\build_payload.py --arch x64 --channel dev --build-id 20260427_V1
 ```
 
 Output:
 
 ```text
-dist\portable\FireDM_<version>_win_x64_portable.zip
+dist\portable\FireDM_<build_id>_<channel>_win_x64_portable.zip
 ```
 
 Portable behavior:
@@ -21,4 +21,3 @@ Portable behavior:
 
 Current limitation:
 - blocked: true app-internal portable config-root isolation is not implemented in FireDM itself in this pass. The ZIP includes `README_PORTABLE.txt` and avoids installer side effects, but FireDM runtime settings may still use the normal application config paths unless the app is later patched for a portable-mode marker.
-

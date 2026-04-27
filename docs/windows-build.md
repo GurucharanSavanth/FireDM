@@ -40,7 +40,8 @@ The one-click wrapper runs:
 .\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
 ```
 
-That installer release path builds the PyInstaller one-dir payload, validates
+That installer release path generates the next `YYYYMMDD_V{N}` build ID, builds
+the PyInstaller one-dir payload, validates
 the payload, creates the x64 installer bootstrapper, validates silent install,
 repair, and uninstall, collects bundled-component license metadata, writes a
 release manifest, and generates SHA256 checksums.
@@ -66,13 +67,17 @@ dist\licenses\
 ```
 
 Expected release files:
-- `FireDM_Setup_<version>_<channel>_win_x64.exe`
-- `FireDM_Setup_<version>_<channel>_win_x64.manifest.json`
-- `FireDM_<version>_win_x64_portable.zip`
-- `SHA256SUMS.txt`
-- `release-body.md`
-- `release-manifest.json`
-- `license-inventory.json`
+- `FireDM_Setup_<build_id>_<channel>_win_x64.exe`
+- `FireDM_Setup_<build_id>_<channel>_win_x64.manifest.json`
+- `FireDM_<build_id>_<channel>_win_x64_portable.zip`
+- `SHA256SUMS_<build_id>.txt`
+- `FireDM_release_notes_<build_id>.md`
+- `FireDM_release_manifest_<build_id>.json`
+- `license-inventory_<build_id>.json`
+
+Stable compatibility aliases are also written: `release-manifest.json`,
+`release-body.md`, `checksums\SHA256SUMS.txt`, and
+`licenses\license-inventory.json`.
 
 ## Smoke verification
 
@@ -101,13 +106,14 @@ Packaged Windows builds are **release-replace**, not self-patching. The in-app u
 ## CI release path
 
 - `.github/workflows/windows-smoke.yml` runs tests, scoped Ruff, `python -m build`, PyInstaller, source smoke, packaged CLI smoke, and uploads the `dist\FireDM` artifact.
-- `.github/workflows/draft-release.yml` runs the x64 installer lane, uploads the generated installer artifacts, and creates a draft GitHub release from the installer, portable zip, checksums, manifest, bundled-component inventory, and notes. Manual runs default to `dev`; tag builds force `stable` and require signing.
+- `.github/workflows/draft-release.yml` runs the x64 installer lane, uploads the generated build-ID artifacts, and dry-runs the GitHub release helper unless manual `publish_release=true` or a `build-YYYYMMDD_VN` tag run is used. Manual runs default to `dev`; tag builds force `stable` and require signing.
 - `.github/workflows/pypi-release.yml` builds wheel/sdist from `pyproject.toml`, checks metadata with Twine, and publishes through PyPI trusted publishing when the PyPI project is configured for this repository.
 
 To create a draft GitHub release from a local machine with GitHub CLI installed:
 
 ```powershell
-gh release create <tag> dist\installers\FireDM_Setup_<version>_<channel>_win_x64.exe dist\portable\FireDM_<version>_win_x64_portable.zip dist\checksums\SHA256SUMS.txt dist\release-manifest.json --draft --repo GurucharanSavanth/FireDM
+.\.venv\Scripts\python.exe scripts\release\github_release.py --manifest dist\release-manifest.json
 ```
 
-Do not run `gh release create` unless you intend to write to GitHub.
+Add `--publish --draft --prerelease` only when the maintainer intends to write
+to GitHub.
