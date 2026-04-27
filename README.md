@@ -45,6 +45,8 @@ Real GUI interaction, real network downloads, playlist-network behavior, and rea
 - Dependency strategy: [docs/dependency-strategy.md](docs/dependency-strategy.md)
 - Testing: [docs/testing.md](docs/testing.md)
 - Windows build: [docs/windows-build.md](docs/windows-build.md)
+- Windows installer release: [docs/release/WINDOWS_INSTALLER.md](docs/release/WINDOWS_INSTALLER.md)
+- Windows portable package: [docs/release/WINDOWS_PORTABLE.md](docs/release/WINDOWS_PORTABLE.md)
 - Known issues: [docs/known-issues.md](docs/known-issues.md)
 - Legacy refactor plan: [docs/legacy-refactor-plan.md](docs/legacy-refactor-plan.md)
 - Windows bootstrap: [bootstrap/windows-dev-setup.md](bootstrap/windows-dev-setup.md)
@@ -118,16 +120,24 @@ Windows PyInstaller package:
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
 ```
 
-One-click GitHub-ready Windows release package:
+One-click local Windows installer build:
 
 ```powershell
 .\build-release.bat
 ```
 
-This writes the portable zip, wheel/sdist, release notes, manifest, and SHA256
-checksums under `release\FireDM-<version>-windows-x64\`.
+The wrapper defaults to the unsigned `dev` channel. Use
+`.\build-release.bat stable` only for a maintainer-controlled build with
+signing configured or a clearly documented unsigned test artifact.
 
-The preferred Windows distributor is the PyInstaller one-folder build in `dist\FireDM`. Historical AppImage and old executable scripts remain for reference only.
+This writes the x64 installer, portable zip, release notes, manifest, license
+inventory, and SHA256 checksums under `dist\installers\`, `dist\portable\`,
+`dist\licenses\`, and `dist\checksums\`.
+
+The preferred Windows distributor is the installed-tree payload generated from
+the PyInstaller one-folder build, then installed by
+`dist\installers\FireDM_Setup_<version>_<channel>_win_x64.exe`. Historical
+AppImage and old executable scripts remain for reference only.
 
 ## PyInstaller Notes
 
@@ -164,7 +174,7 @@ Deno is also external by default for yt-dlp JavaScript-runtime support. Keep Den
 Current workflows:
 
 - `windows-smoke.yml`: Windows source install, tests, scoped Ruff, package build, PyInstaller package smoke, artifact upload.
-- `draft-release.yml`: tag/manual Windows draft-release package build using `scripts/windows-build.ps1 -Release`, then draft GitHub release creation from generated assets.
+- `draft-release.yml`: tag/manual Windows x64 installer lane using `scripts/release/build_windows.py --arch x64`, then draft GitHub release creation from the installer, portable ZIP, checksums, manifest, and bundled-component inventory. Manual runs default to `dev`; tag builds force `stable` and require signing configuration.
 - `pypi-release.yml`: PyPI package build, `twine check`, and trusted-publishing upload path.
 
 CI currently targets Python 3.10 because that is the only verified runtime. Add 3.11/3.12 to CI only when the project is ready to fix and support failures found on those versions.
@@ -195,7 +205,7 @@ Before publishing a Windows release, run:
 .\.venv\Scripts\python.exe -m build --no-isolation
 .\.venv\Scripts\python.exe -m twine check dist\*.whl dist\*.tar.gz
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Release
+.\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
 .\dist\FireDM\firedm.exe --help
 .\dist\FireDM\firedm.exe --imports-only
 .\dist\FireDM\FireDM-GUI.exe

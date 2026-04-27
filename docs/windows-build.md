@@ -37,12 +37,13 @@ One-click local release build:
 The one-click wrapper runs:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Release
+.\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
 ```
 
-That complete release path runs tests, scoped Ruff, wheel/sdist build, Twine
-metadata check, PyInstaller, packaged CLI smoke checks, release zip creation,
-release notes, a JSON manifest, and SHA256 checksums.
+That installer release path builds the PyInstaller one-dir payload, validates
+the payload, creates the x64 installer bootstrapper, validates silent install,
+repair, and uninstall, collects bundled-component license metadata, writes a
+release manifest, and generates SHA256 checksums.
 
 ## Output
 PyInstaller writes a one-folder distribution to:
@@ -55,19 +56,23 @@ Expected executables:
 - `dist\FireDM\firedm.exe`
 - `dist\FireDM\FireDM-GUI.exe`
 
-When `-Release` is used, GitHub-ready assets are written under:
+The new installer lane writes GitHub-ready assets under:
 
 ```text
-release\FireDM-<version>-windows-x64\
+dist\installers\
+dist\portable\
+dist\checksums\
+dist\licenses\
 ```
 
 Expected release files:
-- `FireDM-<version>-windows-x64.zip`
-- `firedm-<version>-py3-none-any.whl`
-- `firedm-<version>.tar.gz`
+- `FireDM_Setup_<version>_<channel>_win_x64.exe`
+- `FireDM_Setup_<version>_<channel>_win_x64.manifest.json`
+- `FireDM_<version>_win_x64_portable.zip`
 - `SHA256SUMS.txt`
 - `release-body.md`
 - `release-manifest.json`
+- `license-inventory.json`
 
 ## Smoke verification
 
@@ -96,13 +101,13 @@ Packaged Windows builds are **release-replace**, not self-patching. The in-app u
 ## CI release path
 
 - `.github/workflows/windows-smoke.yml` runs tests, scoped Ruff, `python -m build`, PyInstaller, source smoke, packaged CLI smoke, and uploads the `dist\FireDM` artifact.
-- `.github/workflows/draft-release.yml` runs `scripts/windows-build.ps1 -Release`, uploads the generated release folder, and creates a draft GitHub release from the script-generated zip, checksums, manifest, and notes.
+- `.github/workflows/draft-release.yml` runs the x64 installer lane, uploads the generated installer artifacts, and creates a draft GitHub release from the installer, portable zip, checksums, manifest, bundled-component inventory, and notes. Manual runs default to `dev`; tag builds force `stable` and require signing.
 - `.github/workflows/pypi-release.yml` builds wheel/sdist from `pyproject.toml`, checks metadata with Twine, and publishes through PyPI trusted publishing when the PyPI project is configured for this repository.
 
 To create a draft GitHub release from a local machine with GitHub CLI installed:
 
 ```powershell
-.\scripts\windows-build.ps1 -Release -PublishDraftRelease -GithubRepo GurucharanSavanth/FireDM
+gh release create <tag> dist\installers\FireDM_Setup_<version>_<channel>_win_x64.exe dist\portable\FireDM_<version>_win_x64_portable.zip dist\checksums\SHA256SUMS.txt dist\release-manifest.json --draft --repo GurucharanSavanth/FireDM
 ```
 
-Do not use `-PublishDraftRelease` unless you intend to write to GitHub.
+Do not run `gh release create` unless you intend to write to GitHub.

@@ -2,13 +2,22 @@ name: draft-release
 
 on:
   push:
-    paths:
-      - "firedm/version.py"
-      - "pyproject.toml"
-      - "scripts/firedm-win.spec"
-      - "scripts/windows-build.ps1"
-      - ".github/workflows/draft-release.yml"
+    tags:
+      - "v*"
   workflow_dispatch:
+    inputs:
+      channel:
+        description: "Build channel. Use dev for unsigned local-style drafts; stable requires signing."
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - stable
+      release_tag:
+        description: "Optional release tag for manual runs. Defaults to v<version>-<channel>."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -50,35 +59,74 @@ jobs:
           firedm/update.py
           tests
 
-      - name: Build Windows distribution
+      - name: Configure optional signing
         shell: pwsh
         run: |
-          .\scripts\windows-build.ps1 -PythonExe (Get-Command python).Source -SkipTests -SkipLint -Release
+          if ("${{ secrets.FIREDM_SIGN_CERT_SHA1 }}" -ne "") {
+            "FIREDM_SIGNTOOL=signtool.exe" >> $env:GITHUB_ENV
+            "FIREDM_SIGN_CERT_SHA1=${{ secrets.FIREDM_SIGN_CERT_SHA1 }}" >> $env:GITHUB_ENV
+          }
+          if ("${{ vars.FIREDM_SIGN_TIMESTAMP_URL }}" -ne "") {
+            "FIREDM_SIGN_TIMESTAMP_URL=${{ vars.FIREDM_SIGN_TIMESTAMP_URL }}" >> $env:GITHUB_ENV
+          }
+
+      - name: Build Windows installer lane
+        shell: pwsh
+        run: |
+          $channel = "${{ github.event.inputs.channel }}"
+          if ([string]::IsNullOrWhiteSpace($channel)) {
+            $channel = "stable"
+          }
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $channel = "stable"
+          }
+          if ($channel -eq "stable") {
+            $env:FIREDM_REQUIRE_SIGNING = "1"
+            "FIREDM_REQUIRE_SIGNING=1" >> $env:GITHUB_ENV
+          }
+          python scripts\release\build_windows.py --arch x64 --channel $channel
           $version = python -c "from firedm.version import __version__; print(__version__)"
           "version=$version" >> $env:GITHUB_ENV
-          "tag=$version" >> $env:GITHUB_ENV
-          "release_dir=release\FireDM-$version-windows-x64" >> $env:GITHUB_ENV
+          "channel=$channel" >> $env:GITHUB_ENV
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            "tag=$env:GITHUB_REF_NAME" >> $env:GITHUB_ENV
+          } elseif (-not [string]::IsNullOrWhiteSpace("${{ github.event.inputs.release_tag }}")) {
+            "tag=${{ github.event.inputs.release_tag }}" >> $env:GITHUB_ENV
+          } else {
+            "tag=v$version-$channel" >> $env:GITHUB_ENV
+          }
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
           name: FireDM-Windows-${{ env.version }}
-          path: release/FireDM-${{ env.version }}-windows-x64/**
+          path: |
+            dist/installers/*.exe
+            dist/installers/*.manifest.json
+            dist/portable/*.zip
+            dist/checksums/SHA256SUMS.txt
+            dist/release-manifest.json
+            dist/release-body.md
+            dist/licenses/license-inventory.json
           if-no-files-found: error
 
       - name: Create draft GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create $env:tag
-          "$env:release_dir\FireDM-$env:version-windows-x64.zip#FireDM Windows portable zip"
-          "$env:release_dir\SHA256SUMS.txt#SHA256 checksums"
-          "$env:release_dir\release-manifest.json#Release manifest"
-          "$env:release_dir\firedm-$env:version-py3-none-any.whl"
-          "$env:release_dir\firedm-$env:version.tar.gz"
-          --draft
-          --title "FireDM version $env:version"
-          --notes-file "$env:release_dir\release-body.md"
-          --target $env:GITHUB_SHA
-          --repo $env:GITHUB_REPOSITORY
+        run: |
+          $installer = "dist\installers\FireDM_Setup_$($env:version)_$($env:channel)_win_x64.exe"
+          $installerManifest = "dist\installers\FireDM_Setup_$($env:version)_$($env:channel)_win_x64.manifest.json"
+          $portable = "dist\portable\FireDM_$($env:version)_win_x64_portable.zip"
+          gh release create $env:tag `
+            "$installer#FireDM Windows x64 installer" `
+            "$installerManifest#Installer manifest" `
+            "$portable#FireDM Windows x64 portable zip" `
+            "dist\checksums\SHA256SUMS.txt#SHA256 checksums" `
+            "dist\release-manifest.json#Release manifest" `
+            "dist\licenses\license-inventory.json#Bundled component inventory" `
+            --draft `
+            --title "FireDM version $env:version" `
+            --notes-file "dist\release-body.md" `
+            --target $env:GITHUB_SHA `
+            --repo $env:GITHUB_REPOSITORY

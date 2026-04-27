@@ -45,6 +45,22 @@ def test_resolve_ffmpeg_path_uses_search_dirs(tmp_path):
     assert result == str(ffmpeg_path.resolve())
 
 
+def test_resolve_ffmpeg_path_uses_app_local_tools_dir(monkeypatch, tmp_path):
+    tools_dir = tmp_path / "FireDM" / "tools"
+    tools_dir.mkdir(parents=True)
+    ffmpeg_path = tools_dir / "ffmpeg.exe"
+    ffmpeg_path.write_text("", encoding="utf-8")
+    monkeypatch.setenv("FIREDM_TOOLS_DIR", str(tools_dir))
+
+    result = resolve_ffmpeg_path(
+        operating_system="Windows",
+        path_lookup=lambda _: None,
+        include_winget=False,
+    )
+
+    assert result == str(ffmpeg_path.resolve())
+
+
 def test_resolve_ffmpeg_path_uses_system_lookup():
     result = resolve_ffmpeg_path(operating_system="Windows", path_lookup=lambda _: r"C:\Tools\ffmpeg.exe")
 
@@ -238,6 +254,22 @@ def test_resolve_ffprobe_uses_winget_fallback(tmp_path):
         operating_system="Windows",
         path_lookup=lambda _: None,
         winget_package_root=tmp_path,
+    )
+
+    assert result == str(ffprobe_path.resolve())
+
+
+def test_resolve_ffprobe_path_uses_app_local_tools_dir(monkeypatch, tmp_path):
+    tools_dir = tmp_path / "FireDM" / "tools"
+    tools_dir.mkdir(parents=True)
+    ffprobe_path = tools_dir / "ffprobe.exe"
+    ffprobe_path.write_text("", encoding="utf-8")
+    monkeypatch.setenv("FIREDM_TOOLS_DIR", str(tools_dir))
+
+    result = resolve_ffprobe_path(
+        operating_system="Windows",
+        path_lookup=lambda _: None,
+        include_winget=False,
     )
 
     assert result == str(ffprobe_path.resolve())
