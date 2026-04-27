@@ -28,6 +28,22 @@ Optional GUI smoke in the same script:
 .\scripts\windows-build.ps1 -SmokeGui
 ```
 
+One-click local release build:
+
+```powershell
+.\build-release.bat
+```
+
+The one-click wrapper runs:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Release
+```
+
+That complete release path runs tests, scoped Ruff, wheel/sdist build, Twine
+metadata check, PyInstaller, packaged CLI smoke checks, release zip creation,
+release notes, a JSON manifest, and SHA256 checksums.
+
 ## Output
 PyInstaller writes a one-folder distribution to:
 
@@ -38,6 +54,20 @@ dist\FireDM\
 Expected executables:
 - `dist\FireDM\firedm.exe`
 - `dist\FireDM\FireDM-GUI.exe`
+
+When `-Release` is used, GitHub-ready assets are written under:
+
+```text
+release\FireDM-<version>-windows-x64\
+```
+
+Expected release files:
+- `FireDM-<version>-windows-x64.zip`
+- `firedm-<version>-py3-none-any.whl`
+- `firedm-<version>.tar.gz`
+- `SHA256SUMS.txt`
+- `release-body.md`
+- `release-manifest.json`
 
 ## Smoke verification
 
@@ -66,5 +96,13 @@ Packaged Windows builds are **release-replace**, not self-patching. The in-app u
 ## CI release path
 
 - `.github/workflows/windows-smoke.yml` runs tests, scoped Ruff, `python -m build`, PyInstaller, source smoke, packaged CLI smoke, and uploads the `dist\FireDM` artifact.
-- `.github/workflows/draft-release.yml` builds the same Windows package, creates `dist\FireDM-Windows.zip`, uploads it as an artifact, and creates a draft GitHub release with `gh release create`.
+- `.github/workflows/draft-release.yml` runs `scripts/windows-build.ps1 -Release`, uploads the generated release folder, and creates a draft GitHub release from the script-generated zip, checksums, manifest, and notes.
 - `.github/workflows/pypi-release.yml` builds wheel/sdist from `pyproject.toml`, checks metadata with Twine, and publishes through PyPI trusted publishing when the PyPI project is configured for this repository.
+
+To create a draft GitHub release from a local machine with GitHub CLI installed:
+
+```powershell
+.\scripts\windows-build.ps1 -Release -PublishDraftRelease -GithubRepo GurucharanSavanth/FireDM
+```
+
+Do not use `-PublishDraftRelease` unless you intend to write to GitHub.

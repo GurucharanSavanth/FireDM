@@ -50,39 +50,20 @@ jobs:
           firedm/update.py
           tests
 
-      - name: Build package
-        run: python -m build
-
       - name: Build Windows distribution
         shell: pwsh
-        run: .\scripts\windows-build.ps1 -PythonExe (Get-Command python).Source -SkipTests
-
-      - name: Prepare release metadata
-        shell: pwsh
         run: |
+          .\scripts\windows-build.ps1 -PythonExe (Get-Command python).Source -SkipTests -SkipLint -Release
           $version = python -c "from firedm.version import __version__; print(__version__)"
           "version=$version" >> $env:GITHUB_ENV
           "tag=$version" >> $env:GITHUB_ENV
-          @"
-          # FireDM $version
-
-          Windows portable build generated from `scripts/windows-build.ps1`.
-
-          - Extract the zip.
-          - Run `FireDM-GUI.exe` for GUI mode.
-          - Run `firedm.exe --help` for CLI mode.
-          - `ffmpeg` and Deno remain external runtime tools; FireDM discovers app-local binaries, PATH, then Winget package folders.
-          "@ | Set-Content -Encoding utf8 release-body.md
-
-      - name: Create Windows zip
-        shell: pwsh
-        run: Compress-Archive -Path .\dist\FireDM\* -DestinationPath .\dist\FireDM-Windows.zip -Force
+          "release_dir=release\FireDM-$version-windows-x64" >> $env:GITHUB_ENV
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
           name: FireDM-Windows-${{ env.version }}
-          path: dist/FireDM-Windows.zip
+          path: release/FireDM-${{ env.version }}-windows-x64/**
           if-no-files-found: error
 
       - name: Create draft GitHub release
@@ -91,9 +72,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create $env:tag
-          "dist\FireDM-Windows.zip#FireDM Windows portable zip"
+          "$env:release_dir\FireDM-$env:version-windows-x64.zip#FireDM Windows portable zip"
+          "$env:release_dir\SHA256SUMS.txt#SHA256 checksums"
+          "$env:release_dir\release-manifest.json#Release manifest"
+          "$env:release_dir\firedm-$env:version-py3-none-any.whl"
+          "$env:release_dir\firedm-$env:version.tar.gz"
           --draft
           --title "FireDM version $env:version"
-          --notes-file release-body.md
+          --notes-file "$env:release_dir\release-body.md"
           --target $env:GITHUB_SHA
           --repo $env:GITHUB_REPOSITORY

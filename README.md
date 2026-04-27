@@ -118,6 +118,15 @@ Windows PyInstaller package:
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
 ```
 
+One-click GitHub-ready Windows release package:
+
+```powershell
+.\build-release.bat
+```
+
+This writes the portable zip, wheel/sdist, release notes, manifest, and SHA256
+checksums under `release\FireDM-<version>-windows-x64\`.
+
 The preferred Windows distributor is the PyInstaller one-folder build in `dist\FireDM`. Historical AppImage and old executable scripts remain for reference only.
 
 ## PyInstaller Notes
@@ -155,7 +164,7 @@ Deno is also external by default for yt-dlp JavaScript-runtime support. Keep Den
 Current workflows:
 
 - `windows-smoke.yml`: Windows source install, tests, scoped Ruff, package build, PyInstaller package smoke, artifact upload.
-- `draft-release.yml`: tag/manual Windows draft-release package build and release artifact creation.
+- `draft-release.yml`: tag/manual Windows draft-release package build using `scripts/windows-build.ps1 -Release`, then draft GitHub release creation from generated assets.
 - `pypi-release.yml`: PyPI package build, `twine check`, and trusted-publishing upload path.
 
 CI currently targets Python 3.10 because that is the only verified runtime. Add 3.11/3.12 to CI only when the project is ready to fix and support failures found on those versions.
@@ -186,6 +195,7 @@ Before publishing a Windows release, run:
 .\.venv\Scripts\python.exe -m build --no-isolation
 .\.venv\Scripts\python.exe -m twine check dist\*.whl dist\*.tar.gz
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Release
 .\dist\FireDM\firedm.exe --help
 .\dist\FireDM\firedm.exe --imports-only
 .\dist\FireDM\FireDM-GUI.exe

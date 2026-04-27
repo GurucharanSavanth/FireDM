@@ -59,8 +59,9 @@ def brain(d=None):
                 raise e
             return
     else:
-        # build segments
-        d.build_segments()
+        # build segments unless an enabled plugin already prepared them.
+        if not getattr(d, '_plugin_segments_ready', False):
+            d.build_segments()
 
     # load progress info
     d.load_progress_info()
@@ -144,6 +145,18 @@ def file_manager(d, q, keep_segments=True):
                     break
                 else:
                     continue
+
+            # Plugin hook: segment downloaded, pre-merge window (e.g. DRM decryption)
+            try:
+                from .plugins.registry import PluginRegistry
+                if not PluginRegistry.fire_hook('segment_complete', seg):
+                    d.status = Status.error
+                    break
+            except Exception as _hook_e:
+                log(f'segment_complete hook error: {_hook_e}')
+
+            if d.status == Status.error:
+                break
 
             # append downloaded segment to temp file, mark as completed
             try:
@@ -306,6 +319,18 @@ def file_manager(d, q, keep_segments=True):
             # at this point all done successfully
             # report all blocks
             d.update_segments_progress()
+
+            # Plugin hook: download_complete — post-processing (AV scan, organise, etc.)
+            try:
+                from .plugins.registry import PluginRegistry
+                if not PluginRegistry.fire_hook('download_complete', d):
+                    d.status = Status.error
+                    break
+            except Exception as _hook_e:
+                log(f'download_complete hook error: {_hook_e}')
+
+            if d.status == Status.error:
+                break
 
             d.status = Status.completed
             # print('---------file manager done merging segments---------')

@@ -24,7 +24,8 @@ settings_keys = [
     'proxy', 'recent_folders', 'refresh_url_retries', 'scrollbar_width', 'speed_limit', 'update_frequency',
     'playlist_autonum_options', 'use_server_timestamp', 'window_size', 'write_metadata', 'view_mode', 'temp_folder',
     'window_maximized', 'force_window_maximize', 'd_preview', 'updater_version', 'media_presets',
-    'video_title_template', 'ffmpeg_actual_path', 'allow_user_extractors'
+    'video_title_template', 'ffmpeg_actual_path', 'allow_user_extractors',
+    'plugin_states', 'plugin_dir', 'allow_user_plugins',
 ]
 
 # ----------------------------------------------------------------------------------------General ----------------------
@@ -125,6 +126,11 @@ media_presets = dict(
 # on next FireDM launch. Set to True (config or setting.cfg) to opt back in
 # for trusted plugin authors. See tests/test_security.py F-HIGH-6.
 allow_user_extractors = False
+
+# Plugin system — all plugins default OFF; user enables via GUI toggle
+plugin_states = {}       # {plugin_name: bool}  persisted in setting.cfg
+plugin_dir = ''          # path to custom user plugin directory
+allow_user_plugins = False  # SECURITY: loading user plugins = importlib exec
 
 # video qualities
 vq = {

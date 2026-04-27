@@ -186,6 +186,15 @@ def load_setting():
     # update config module
     config.__dict__.update(safe_settings)
 
+    # Plugin loading is deferred to Controller init so registry imports do not
+    # run during settings deserialization.
+    config.plugin_states = settings.get('plugin_states', {})
+    if not isinstance(config.plugin_states, dict):
+        config.plugin_states = {}
+    if not isinstance(config.plugin_dir, str):
+        config.plugin_dir = ''
+    config.allow_user_plugins = bool(config.allow_user_plugins)
+
 
 def save_setting():
     # web authentication
@@ -202,4 +211,3 @@ def save_setting():
             log('settings saved in:', file)
     except Exception as e:
         log('save_setting() > error', e)
-

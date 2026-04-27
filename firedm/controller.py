@@ -15,6 +15,8 @@
         controller will update the current view
 """
 import re
+import threading
+from multiprocessing.connection import AuthenticationError
 from datetime import datetime
 import os, sys, time
 from copy import copy
@@ -22,6 +24,7 @@ from threading import Thread
 from queue import Queue
 from datetime import date
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlsplit
 
 try:
     from ctypes import windll, wintypes, byref
@@ -41,6 +44,7 @@ from .brain import brain
 from . import video
 from .video import get_media_info, process_video
 from .model import ObservableDownloadItem, ObservableVideo
+from .native_messaging import MAX_NATIVE_MESSAGE_BYTES, decode_controller_payload, load_or_create_secret, make_listener
 
 
 def set_option(**kwargs):
@@ -48,6 +52,12 @@ def set_option(**kwargs):
     try:
         config.__dict__.update(kwargs)
         # log('Settings:', kwargs)
+        try:
+            from .plugins.registry import PluginRegistry
+            for k, v in kwargs.items():
+                PluginRegistry.fire_hook('config_change', k, v)
+        except Exception:
+            pass
     except:
         pass
 
@@ -311,7 +321,14 @@ class Controller:
 
     """
 
+    _instance = None  # Singleton reference for plugin access via Controller._instance
+
     def __init__(self, view_class, custom_settings={}):
+        Controller._instance = self
+        self._native_endpoint_ready = False
+        self._native_listener = None
+        self._native_control_thread = None
+        self._native_control_stop = threading.Event()
         self.observer_q = Queue()  # queue to collect references for updated download items
 
         # youtube-dl object
@@ -325,6 +342,7 @@ class Controller:
 
         # load application settings
         self._load_settings()
+        self._init_plugins()
 
         self.url = ''
         self.playlist = []
@@ -352,6 +370,133 @@ class Controller:
 
         # check for ffmpeg and update file path "config.ffmpeg_actual_path"
         check_ffmpeg()
+
+        self._native_endpoint_ready = True
+        if self._is_browser_integration_enabled():
+            self._start_native_control_endpoint()
+
+    def _is_browser_integration_enabled(self):
+        try:
+            from .plugins.registry import PluginRegistry
+
+            return PluginRegistry.is_enabled('browser_integration')
+        except Exception:
+            return False
+
+    def _start_native_control_endpoint(self, force=False):
+        if self._native_listener is not None:
+            return True
+        if not force and not self._is_browser_integration_enabled():
+            return False
+
+        try:
+            secret = load_or_create_secret()
+            self._native_listener = make_listener(authkey=secret)
+            self._native_control_stop.clear()
+            self._native_control_thread = threading.Thread(
+                target=self._native_control_loop,
+                daemon=True,
+                name='firedm-native-control',
+            )
+            self._native_control_thread.start()
+            log('Native messaging control endpoint started', log_level=2)
+            return True
+        except Exception as e:
+            self._native_listener = None
+            log('Native messaging endpoint start failed:', e)
+            return False
+
+    def _stop_native_control_endpoint(self):
+        self._native_control_stop.set()
+        listener = self._native_listener
+        self._native_listener = None
+        if listener is not None:
+            try:
+                listener.close()
+            except Exception:
+                pass
+
+    def _native_control_loop(self):
+        while not self._native_control_stop.is_set():
+            listener = self._native_listener
+            if listener is None:
+                break
+            conn = None
+            try:
+                conn = listener.accept()
+                data = conn.recv_bytes(MAX_NATIVE_MESSAGE_BYTES)
+                msg = decode_controller_payload(data)
+                self._handle_native_message(msg)
+            except AuthenticationError:
+                log('Native messaging authentication failed', log_level=2)
+            except OSError as e:
+                if not self._native_control_stop.is_set():
+                    log('Native messaging endpoint error:', e)
+                    time.sleep(1)
+            except Exception as e:
+                log('Native messaging message rejected:', e, log_level=2)
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
+    def _handle_native_message(self, msg):
+        if not isinstance(msg, dict):
+            return False
+        action = msg.get('action')
+        if action == 'download':
+            url = msg.get('url', '')
+            if not self._is_native_http_url(url):
+                log('Native messaging rejected non-http download URL', log_level=2)
+                return False
+            self.browser_download(
+                url=url,
+                referer=msg.get('referer', ''),
+                headers=self._coerce_native_headers(msg.get('headers')),
+                filename=msg.get('filename', '')
+            )
+            return True
+        elif action == 'capture_stream':
+            manifest_url = msg.get('manifest_url', '')
+            if not self._is_native_http_url(manifest_url):
+                log('Native messaging rejected non-http stream URL', log_level=2)
+                return False
+            self.capture_stream(
+                manifest_url=manifest_url,
+                page_url=msg.get('page_url', ''),
+            )
+            return True
+        log('Native messaging rejected unsupported action', log_level=2)
+        return False
+
+    @staticmethod
+    def _is_native_http_url(url):
+        try:
+            scheme = urlsplit(str(url)).scheme.lower()
+        except Exception:
+            return False
+        return scheme in ('http', 'https')
+
+    @staticmethod
+    def _coerce_native_headers(headers):
+        if not isinstance(headers, dict):
+            return {}
+        sensitive = {'authorization', 'proxy-authorization', 'cookie', 'set-cookie'}
+        safe_headers = {}
+        for key, value in headers.items():
+            if not isinstance(key, str):
+                continue
+            name = key.strip()
+            if not name or ':' in name or '\r' in name or '\n' in name:
+                continue
+            if name.lower() in sensitive:
+                continue
+            if not isinstance(value, (str, int, float)):
+                continue
+            safe_headers[name] = str(value).replace('\r', '').replace('\n', '')
+        return safe_headers
 
     # region process url
     def auto_refresh_url(self, d):
@@ -543,6 +688,19 @@ class Controller:
     # endregion
 
     # region settings
+    def _init_plugins(self):
+        """Scan plugins and load only plugins explicitly enabled by settings."""
+        try:
+            from .plugins.registry import PluginRegistry
+            PluginRegistry.scan_plugins()
+            if not isinstance(config.plugin_states, dict):
+                config.plugin_states = {}
+            for name, enabled in list(config.plugin_states.items()):
+                if enabled:
+                    PluginRegistry.load(name)
+        except Exception as e:
+            log(f'Controller plugin init error: {e}')
+
     def _load_settings(self, **kwargs):
         if not self.ignore_dlist:
             # load stored setting from disk
@@ -728,6 +886,61 @@ class Controller:
 
             time.sleep(60)
 
+    def browser_download(self, url, referer='', headers=None, filename=''):
+        """Start a download originating from the browser_integration plugin."""
+        d = ObservableDownloadItem()
+        d.update(url)
+        d.eff_url = d.eff_url or url
+        if isinstance(getattr(d, 'http_headers', None), dict):
+            if headers:
+                d.http_headers.update(headers)
+            if referer:
+                d.http_headers['Referer'] = referer
+        if filename:
+            d.name = validate_file_name(filename)
+        self.download(d=d)
+
+    def capture_stream(self, manifest_url, page_url=''):
+        """Capture an HLS/DASH stream URL sent from the browser extension."""
+        d = ObservableDownloadItem()
+        d.update(manifest_url)
+        d.eff_url = d.eff_url or manifest_url
+        d.manifest_url = manifest_url
+        if page_url and isinstance(getattr(d, 'http_headers', None), dict):
+            d.http_headers['Referer'] = page_url
+        self.download(d=d)
+
+    def _start_queued_download(self, uid: str) -> bool:
+        """Resume a pending download by uid (called by queue_scheduler plugin)."""
+        d = self.d_map.get(uid)
+        if d and d.status == Status.pending:
+            self._download(d)
+            return True
+        return False
+
+    def _fire_download_start_plugins(self, d):
+        try:
+            from .plugins.registry import PluginRegistry
+            if not PluginRegistry.fire_hook('download_start', d):
+                log('Plugin blocked download:', d.name)
+                return False
+            return True
+        except Exception as e:
+            log(f'download_start hook error: {e}')
+            return True
+
+    def _finalize_plugin_completed_download(self, d):
+        source = getattr(d, '_plugin_completed_file', '')
+        if source and os.path.isfile(source) and source != d.target_file:
+            if not rename_file(source, d.target_file):
+                d.status = Status.error
+                return False
+        try:
+            d.delete_tempfiles()
+        except Exception:
+            pass
+        return True
+
     def _pre_download_checks(self, d, silent=False, force_rename=False):
         """do all checks required for this download
 
@@ -740,11 +953,19 @@ class Controller:
         """
 
         showpopup = not silent
+        plugin_start_fired = False
 
         if not (d or d.url):
             log('Nothing to download', start='', showpopup=showpopup)
             return False
-        elif not d.type or d.type == 'text/html':
+
+        scheme = urlsplit(getattr(d, 'url', '')).scheme.lower()
+        if scheme and scheme not in ('http', 'https'):
+            plugin_start_fired = True
+            if not self._fire_download_start_plugins(d):
+                return False
+
+        if not d.type or d.type == 'text/html':
             if not silent:
                 response = self.get_user_response(popup_id=1)
                 if response == 'Ok':
@@ -867,6 +1088,10 @@ class Controller:
             if res != 'Yes':
                 return False
 
+        # Plugin hook: download_start — plugins may block or modify the download
+        if not plugin_start_fired and not self._fire_download_start_plugins(d):
+            return False
+
         # if above checks passed will return True
         return True
 
@@ -891,7 +1116,10 @@ class Controller:
         pre_checks = self._pre_download_checks(d, silent=silent, force_rename=kwargs.get('force_rename', False))
         # print('precheck:', pre_checks)
 
-        if pre_checks:
+        plugin_queued = getattr(d, '_plugin_queued', False) and d.status == Status.pending
+        plugin_completed = getattr(d, '_plugin_completed', False) and d.status == Status.completed
+
+        if pre_checks or plugin_queued:
             # update view
             self.report_d(d, command='new')
 
@@ -904,7 +1132,11 @@ class Controller:
             # save on disk
             self.save_d_map()
 
-            if not download_later:
+            if plugin_completed:
+                self._finalize_plugin_completed_download(d)
+                self.report_d(d)
+                self._post_download(d)
+            elif not download_later and not plugin_queued:
                 d.status = Status.pending
                 self.download_q.put(d)
                 pipeline_event(
@@ -913,6 +1145,15 @@ class Controller:
                     uid=d.uid,
                     name=d.name,
                     type=d.type,
+                )
+            elif plugin_queued:
+                pipeline_event(
+                    PipelineStage.DOWNLOAD_ENQUEUE,
+                    "ok",
+                    uid=d.uid,
+                    name=d.name,
+                    type=d.type,
+                    detail="queued by plugin",
                 )
 
             return True
@@ -1680,6 +1921,7 @@ class Controller:
     def quit(self):
         config.shutdown = True  # set global shutdown flag
         config.ytdl_abort = True
+        self._stop_native_control_endpoint()
 
         # cancel all current downloads
         for d in self.d_map.values():

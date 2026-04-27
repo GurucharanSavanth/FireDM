@@ -6,12 +6,15 @@
 !docs/*
 !firedm/
 !firedm/*.py
+!firedm/plugins/
+!firedm/plugins/*.py
 !ChangeLog.txt
 !contributors.md
 !BASELINE_AUDIT.md
 !AGENTS.md
 !LICENSE
 !firedm.py
+!build-release.bat
 !README.md
 !requirements.txt
 !setup.py

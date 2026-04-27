@@ -20,12 +20,14 @@ Use this file as `/init` state for continuing FireDM modernization. Bootstrap is
 - Lint modernized seam: `.\.venv\Scripts\python.exe -m ruff check firedm\FireDM.py firedm\app_paths.py firedm\extractor_adapter.py firedm\ffmpeg_service.py firedm\tool_discovery.py firedm\setting.py firedm\update.py tests`
 - Build wheel/sdist: `.\.venv\Scripts\python.exe -m build`
 - Build Windows package: `powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1`
+- One-click GitHub-ready release: `.\build-release.bat`
 
 ## Packaging State
 - Packaging is now driven by `pyproject.toml`; `setup.py` is a compatibility shim only.
 - Preferred Windows distributor is PyInstaller via `scripts/firedm-win.spec`.
 - Legacy `scripts/exe_build/*` and AppImage scripts remain historical reference, not preferred release paths.
 - Packaged Windows builds are release-replace, not in-place self-updating.
+- `scripts/windows-build.ps1 -Release` is the canonical local release command; it emits zip, wheel/sdist, release notes, manifest, and SHA256 checksums under `release\FireDM-<version>-windows-x64\`.
 
 ## Modernized Seams
 - `firedm/app_paths.py`: settings path resolution

@@ -75,6 +75,7 @@ build = [
 
 [project.scripts]
 firedm = "firedm.FireDM:main"
+firedm-native-host = "firedm.native_host:main"
 
 [project.urls]
 Homepage = "https://github.com/GurucharanSavanth/FireDM"
@@ -86,7 +87,7 @@ Releases = "https://github.com/GurucharanSavanth/FireDM/releases"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["firedm"]
+include = ["firedm", "firedm.*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "firedm.version.__version__" }

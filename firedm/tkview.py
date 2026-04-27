@@ -3971,6 +3971,65 @@ class MainWindow(IView):
 
         separator()
 
+        # ------------------------------------------------------------------------------------Plugin Manager--------------
+        heading('Plugin Manager:')
+
+        plugin_list_frame = tk.Frame(tab, bg=bg)
+        plugin_list_frame.pack(anchor='w', fill='x', expand=True)
+
+        def refresh_plugin_ui():
+            for w in plugin_list_frame.winfo_children():
+                w.destroy()
+            try:
+                from .plugins.registry import PluginRegistry
+                PluginRegistry.scan_plugins()
+                plugins = PluginRegistry.get_plugin_list()
+            except Exception:
+                plugins = []
+
+            if not plugins:
+                tk.Label(plugin_list_frame, text='No plugins found.',
+                         bg=bg, fg=fg).pack(anchor='w', padx=5)
+                return
+
+            for meta in plugins:
+                pname = meta.name
+                row = tk.Frame(plugin_list_frame, bg=bg)
+                row.pack(anchor='w', fill='x', padx=5, pady=1)
+                var = tk.BooleanVar(value=meta.enabled)
+
+                def _toggle(n=pname, v=var):
+                    try:
+                        from .plugins.registry import PluginRegistry
+                        if v.get():
+                            success = PluginRegistry.load(n)
+                            if not success:
+                                v.set(False)
+                        else:
+                            PluginRegistry.unload(n)
+                        refresh_plugin_ui()
+                    except Exception as _e:
+                        log(f'Plugin toggle error: {_e}')
+
+                label = f'{pname}  v{meta.version}  [{meta.author}]  — {meta.description}'
+                cb = tk.Checkbutton(
+                    row, text=label, variable=var, command=_toggle,
+                    bg=bg, fg='#44bb44' if meta.enabled else fg,
+                    selectcolor=bg, activebackground=bg, anchor='w',
+                )
+                cb.pack(side='left', anchor='w')
+
+        tk.Button(tab, text='Refresh plugins', bg=bg, fg=fg,
+                  command=refresh_plugin_ui).pack(anchor='w', padx=5)
+
+        refresh_plugin_ui()
+
+        CheckOption(tab, 'Allow loading plugins from custom folder '
+                    '(security risk — enable only for trusted plugins)',
+                    key='allow_user_plugins').pack(anchor='w', padx=5)
+
+        separator()
+
         # ------------------------------------------------------------------------------------Debugging options---------
         # debugging shouldn't be available for normal users
         # will reset these options in case it is previously stored in user config file
