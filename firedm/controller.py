@@ -71,7 +71,7 @@ def check_ffmpeg():
         operating_system=config.operating_system,
     )
 
-    if ffmpeg_info.found:
+    if ffmpeg_info.usable:
         config.ffmpeg_actual_path = ffmpeg_info.path
         config.ffmpeg_version = ffmpeg_info.version
 
@@ -87,12 +87,18 @@ def check_ffmpeg():
         )
         return True
 
-    log(f'can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
-        config.global_sett_folder, 'or', config.current_directory)
+    failure = ffmpeg_info.failure or "not found"
+    if ffmpeg_info.found:
+        log(f'ffmpeg is not usable: {failure} - at: {ffmpeg_info.path}')
+    else:
+        log(f'can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
+            config.global_sett_folder, 'or', config.current_directory)
     pipeline_event(
         PipelineStage.FFMPEG_DISCOVER,
         "fail",
-        detail="ffmpeg not located in saved path, current dir, global settings, or PATH",
+        detail=failure,
+        path=ffmpeg_info.path,
+        returncode=ffmpeg_info.returncode,
         searched=[config.current_directory, config.global_sett_folder],
     )
 

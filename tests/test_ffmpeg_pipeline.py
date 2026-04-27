@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
+import json
+
 from firedm.ffmpeg_commands import (
     build_audio_convert_command,
     build_hls_process_command,
@@ -78,3 +81,67 @@ def test_ffmpeg_service_reports_not_found_when_missing(tmp_path):
     )
     assert info.found is False
     assert info.path == ""
+    assert info.usable is False
+    assert info.failure == "not found"
+
+
+def test_verify_ffmpeg_pipeline_json_includes_ffmpeg_and_ffprobe_health(monkeypatch, tmp_path):
+    verify_script = importlib.import_module("scripts.verify_ffmpeg_pipeline")
+    monkeypatch.setattr(verify_script, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(
+        verify_script,
+        "collect_media_tool_health",
+        lambda **_: {
+            "ffmpeg": {
+                "found": True,
+                "path": "C:/Tools/ffmpeg.exe",
+                "version": "8.1",
+                "usable": True,
+                "failure": "",
+                "returncode": 0,
+            },
+            "ffprobe": {
+                "found": False,
+                "path": "",
+                "version": "",
+                "usable": False,
+                "failure": "not found",
+                "returncode": None,
+            },
+        },
+    )
+
+    assert verify_script.main() == 0
+    data = json.loads((tmp_path / "ffmpeg_pipeline_result.json").read_text(encoding="utf-8"))
+    assert data["ffmpeg"]["usable"] is True
+    assert data["ffprobe"]["usable"] is False
+    assert data["ffprobe"]["failure"] == "not found"
+
+
+def test_verify_ffmpeg_pipeline_exit_code_depends_on_ffmpeg_only(monkeypatch, tmp_path):
+    verify_script = importlib.import_module("scripts.verify_ffmpeg_pipeline")
+    monkeypatch.setattr(verify_script, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(
+        verify_script,
+        "collect_media_tool_health",
+        lambda **_: {
+            "ffmpeg": {
+                "found": True,
+                "path": "C:/Tools/ffmpeg.exe",
+                "version": "8.1",
+                "usable": True,
+                "failure": "",
+                "returncode": 0,
+            },
+            "ffprobe": {
+                "found": False,
+                "path": "",
+                "version": "",
+                "usable": False,
+                "failure": "not found",
+                "returncode": None,
+            },
+        },
+    )
+
+    assert verify_script.main() == 0

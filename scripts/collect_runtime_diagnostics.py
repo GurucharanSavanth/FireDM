@@ -30,15 +30,15 @@ sys.path.insert(0, str(REPO_ROOT))
 def main() -> int:
     from firedm import config, video
     from firedm.extractor_adapter import SERVICE
-    from firedm.ffmpeg_service import locate_ffmpeg
+    from firedm.ffmpeg_service import collect_media_tool_health
     from firedm.pipeline_logger import PipelineStage
     from firedm.tool_discovery import resolve_binary_path
 
     video.load_extractor_engines()
     SERVICE.wait_until_ready(timeout=30.0)
 
-    ff = locate_ffmpeg(
-        saved_path=config.ffmpeg_actual_path or "",
+    media_tools = collect_media_tool_health(
+        saved_ffmpeg_path=config.ffmpeg_actual_path or "",
         search_dirs=(config.current_directory, config.global_sett_folder or ""),
         operating_system=config.operating_system,
     )
@@ -61,11 +61,8 @@ def main() -> int:
         "platform": platform.platform(),
         "extractor_service": SERVICE.snapshot(),
         "legacy_ytdl_global": getattr(video.ytdl, "__name__", None),
-        "ffmpeg": {
-            "path": ff.path,
-            "version": ff.version,
-            "found": ff.found,
-        },
+        "ffmpeg": media_tools["ffmpeg"],
+        "ffprobe": media_tools["ffprobe"],
         "javascript_runtime": {
             "deno_path": deno_path,
             "deno_version": deno_version,

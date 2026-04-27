@@ -30,17 +30,19 @@ from firedm.ffmpeg_commands import (  # noqa: E402
     build_merge_command,
     dash_audio_extension_for,
 )
-from firedm.ffmpeg_service import locate_ffmpeg  # noqa: E402
+from firedm.ffmpeg_service import collect_media_tool_health  # noqa: E402
 
 
 def main() -> int:
-    ff_info = locate_ffmpeg(
-        saved_path=config.ffmpeg_actual_path or "",
+    media_tools = collect_media_tool_health(
+        saved_ffmpeg_path=config.ffmpeg_actual_path or "",
         search_dirs=(config.current_directory, config.global_sett_folder or ""),
         operating_system=config.operating_system,
     )
+    ff_info = media_tools["ffmpeg"]
+    ffprobe_info = media_tools["ffprobe"]
 
-    ffmpeg_path = ff_info.path or "ffmpeg"
+    ffmpeg_path = str(ff_info["path"] or "ffmpeg")
 
     merge = build_merge_command(
         video_file="video.mp4", audio_file="audio.m4a",
@@ -67,11 +69,8 @@ def main() -> int:
 
     result = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "ffmpeg": {
-            "found": ff_info.found,
-            "path": ff_info.path,
-            "version": ff_info.version,
-        },
+        "ffmpeg": ff_info,
+        "ffprobe": ffprobe_info,
         "merge_command": {
             "fast_uses_stream_copy": "-c copy" in merge.fast,
             "slow_reencodes": "-c copy" not in merge.slow,
@@ -96,8 +95,11 @@ def main() -> int:
     audit_lines = [
         "# FFmpeg Merge Command Audit\n",
         f"- Timestamp: `{result['timestamp']}`",
-        f"- ffmpeg path: `{ff_info.path or '(not located)'}`",
-        f"- ffmpeg version: `{ff_info.version or '(unknown)'}`",
+        f"- ffmpeg path: `{ff_info['path'] or '(not located)'}`",
+        f"- ffmpeg version: `{ff_info['version'] or '(unknown)'}`",
+        f"- ffmpeg usable: `{ff_info['usable']}`",
+        f"- ffprobe path: `{ffprobe_info['path'] or '(not located)'}`",
+        f"- ffprobe usable: `{ffprobe_info['usable']}`",
         "",
         "## Merge command (DASH video + audio → single container)",
         "",
@@ -140,7 +142,7 @@ def main() -> int:
     (ARTIFACTS / "merge_command_audit.md").write_text("\n".join(audit_lines), encoding="utf-8")
 
     print(json.dumps(result, indent=2))
-    return 0 if ff_info.found else 1
+    return 0 if ff_info["usable"] else 1
 
 
 if __name__ == "__main__":

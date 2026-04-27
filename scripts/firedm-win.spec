@@ -64,7 +64,18 @@ def collect_windows_tk_assets():
     return tk_datas, tk_binaries
 
 
+def collect_windows_runtime_binaries():
+    dll_root = Path(sys.base_prefix) / "DLLs"
+    binaries = []
+    for name in ("_socket.pyd", "_ssl.pyd", "_hashlib.pyd"):
+        path = dll_root / name
+        if path.is_file():
+            binaries.append((str(path), "."))
+    return binaries
+
+
 tk_datas, tk_binaries = collect_windows_tk_assets()
+runtime_binaries = collect_windows_runtime_binaries()
 datas = safe_collect_data_files("certifi") + safe_collect_data_files("yt_dlp_ejs") + tk_datas
 hiddenimports = sorted(
     set(
@@ -80,7 +91,7 @@ hiddenimports = sorted(
 a = Analysis(
     [str(main_script)],
     pathex=[str(project_root)],
-    binaries=tk_binaries,
+    binaries=tk_binaries + runtime_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

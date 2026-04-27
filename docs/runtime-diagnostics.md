@@ -8,6 +8,12 @@
 
 Writes `artifacts/diagnostics/runtime_snapshot.json`.
 
+The snapshot reports `ffmpeg` and `ffprobe` as separate health blocks:
+`found`, `path`, `version`, `usable`, `failure`, and `returncode`.
+`ffmpeg.usable` means the executable was found and `-version` exited 0.
+`ffprobe` is diagnostic/metadata support in this patch; it is not a hard
+requirement for current download enqueue or post-processing behavior.
+
 ## Reading the structured pipeline log
 
 Every relevant boundary emits a line of the form:
@@ -36,7 +42,7 @@ Select-String -Path .\log.txt -Pattern '\[pipeline\]'
 | `stream_select` | reserved for future use by controller | |
 | `download_enqueue` | `Controller.download` | pre-checks passed; item on `download_q` |
 | `download_start` | reserved for brain/worker | |
-| `ffmpeg_discover` | `controller.check_ffmpeg` | `ffmpeg.exe` located with a version |
+| `ffmpeg_discover` | `controller.check_ffmpeg` | `ffmpeg.exe` located and `ffmpeg -version` returned rc=0 |
 | `ffmpeg_merge` | `merge_video_audio`, `post_process_hls` | ffmpeg returned rc=0 |
 
 ## Common triage paths
@@ -70,10 +76,10 @@ Select-String -Path .\log.txt -Pattern '\[pipeline\]'
 
 | Script | What it proves |
 | --- | --- |
-| `scripts/collect_runtime_diagnostics.py` | python, platform, extractor state, Deno/yt-dlp-ejs, ffmpeg, active config |
+| `scripts/collect_runtime_diagnostics.py` | python, platform, extractor state, Deno/yt-dlp-ejs, ffmpeg/ffprobe health, active config |
 | `scripts/verify_extractor_default.py` | yt_dlp is the runtime default even when the persisted config says otherwise |
 | `scripts/verify_playlist_entry_normalization.py` | 7 entry-shape cases all normalize correctly |
-| `scripts/verify_ffmpeg_pipeline.py` | ffmpeg discoverable + every command builder produces the expected shape |
+| `scripts/verify_ffmpeg_pipeline.py` | ffmpeg usable + every command builder produces the expected shape; ffprobe health is reported but not exit-code mandatory |
 | `scripts/verify_packaged_video_flow.py` | packaged binary launches, diagnostics green |
 | `scripts/smoke_video_pipeline.py` | synthetic network-free single + playlist smoke |
 | `scripts/repro_youtube_bug.py` | live single + playlist repro against real YouTube |

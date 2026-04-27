@@ -136,13 +136,15 @@ Do not remove the manual spec override until PyInstaller detection works without
 
 ## External Tools
 
-`ffmpeg` is external by default. FireDM discovers `ffmpeg.exe` in this order:
+`ffmpeg` is external by default. FireDM discovers `ffmpeg.exe` in this order and then verifies it with `ffmpeg -version`:
 
 - saved configured path
 - application/current directory
 - global settings directory
 - `PATH`
 - Winget package folders on Windows
+
+`ffprobe` is checked separately for diagnostics and metadata support. FireDM first looks beside the resolved/saved `ffmpeg` path, then uses the same application directory, settings directory, `PATH`, and Winget fallback search. This patch does not make `ffprobe` mandatory for current download enqueue or post-processing behavior.
 
 If ffmpeg is missing, FireDM no longer downloads stale binaries from the historical upstream repository. The GUI opens ffmpeg installation guidance instead.
 
@@ -199,7 +201,7 @@ Manual checks still required:
 
 ## Troubleshooting
 
-- If `ffmpeg` is installed but not found, check the actual install path. Agent shells can have stale `PATH`; FireDM also checks Winget package folders where the current process has access. If Winget package folders are access-denied, add ffmpeg to `PATH` or copy `ffmpeg.exe` beside the app.
+- If `ffmpeg` is installed but not found or not usable, check the actual install path and run `ffmpeg -version`. Agent shells can have stale `PATH`; FireDM also checks Winget package folders where the current process has access. If Winget package folders are access-denied, add ffmpeg to `PATH` or copy `ffmpeg.exe` beside the app. `ffprobe` health is reported separately and can be fixed by placing `ffprobe.exe` beside `ffmpeg.exe` or on `PATH`.
 - If PyInstaller reports tkinter as broken, keep the manual Tcl/Tk spec override and verify packaged Tk assets exist.
 - If `.venv` dependency installation fails on Windows, verify Python `3.10.11` and the official pycurl wheel path before attempting source builds.
 - If `dist\FireDM` cannot be removed during rebuild, close stale packaged FireDM processes.
