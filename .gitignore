@@ -1,17 +1,59 @@
-# ignore all files and directories
+# Ignore all files and directories by default.
 *
 
-# include only the following
+# Generated outputs and local state. These are covered by the catch-all above,
+# but the explicit patterns keep intent visible when this allowlist changes.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+*.spec.tmp
+release-output/
+installer-output/
+artifacts/tmp/
+artifacts/**/tmp/
+artifacts/**/logs/
+artifacts/**/screenshots/
+artifacts/**/manual_qa_local/
+artifacts/full_codebase_repair/pyinstaller-build/
+artifacts/full_codebase_repair/pyinstaller-dist/
+*.exe
+*.msi
+*.msix
+*.msixbundle
+*.zip
+*.7z
+*.tar
+*.gz
+*.log
+
+# Include source-controlled project files.
 !docs/
 !docs/*
+!docs/release/
+!docs/release/*.md
 !firedm/
 !firedm/*.py
+!firedm/plugins/
+!firedm/plugins/*.py
 !ChangeLog.txt
 !contributors.md
 !BASELINE_AUDIT.md
 !AGENTS.md
 !LICENSE
 !firedm.py
+!build-release.bat
 !README.md
 !requirements.txt
 !setup.py
@@ -20,6 +62,8 @@
 !.gitignore
 !.gitattributes
 !scripts/
+!scripts/release/
+!scripts/release/*.py
 !bootstrap/
 !bootstrap/*
 !scripts/utils.py
@@ -35,12 +79,23 @@
 !scripts/windows-build.ps1
 !scripts/*.py
 !artifacts/
-!artifacts/**
+!artifacts/windows_installer/
+!artifacts/windows_installer/*.md
+!artifacts/windows_installer_phase2/
+!artifacts/windows_installer_phase2/*.md
+!artifacts/final_wrapup/
+!artifacts/final_wrapup/*.md
+!artifacts/build_release_update/
+!artifacts/build_release_update/*.md
+!artifacts/dependency_maintenance/
+!artifacts/dependency_maintenance/*.md
 !icons/
 !icons/48x48.png
 !icons/48_32_16.ico
 !tests/
 !tests/*.py
+!tests/release/
+!tests/release/*.py
 !.github/
 !.github/workflows/
 !.github/workflows/*

@@ -13,8 +13,11 @@
 
 import os
 import time
+import ssl
+from urllib.parse import unquote, urlparse
 import pycurl
 
+from . import config
 from .config import Status, error_q, jobs_q, max_seg_retries
 from .utils import log, set_curl_options, format_bytes, translate_server_code
 
@@ -259,6 +262,144 @@ class Worker:
             self.d.downloaded += value
             self.seg.down_bytes += value
 
+    def _run_protocol_handler(self, protocol_handler):
+        if protocol_handler in ('ftp', 'ftps'):
+            self._ftp_download()
+        elif protocol_handler == 'sftp':
+            self._sftp_download()
+        elif protocol_handler in ('webdav', 'webdavs'):
+            self._webdav_download(protocol_handler)
+        else:
+            raise Exception(f'unsupported protocol handler: {protocol_handler}')
+
+    def _curl_impersonate_download(self):
+        """Download segment using curl-impersonate for TLS fingerprint spoofing."""
+        import subprocess
+        try:
+            from .plugins.registry import PluginRegistry
+            plugin = None
+            meta = PluginRegistry._plugins.get('anti_detection')
+            if meta and meta.instance:
+                plugin = meta.instance
+
+            if not plugin:
+                self.report_error('Anti-detection plugin not loaded')
+                return
+
+            cmd = plugin._get_curl_impersonate_cmd(self.d, self.seg)
+
+            start_byte = self.seg.current_size if self.seg.current_size else 0
+            if start_byte:
+                cmd.extend(['-r', f'{start_byte}-'])
+
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            _stdout, stderr = proc.communicate()
+
+            if proc.returncode != 0:
+                err = stderr.decode('utf-8', errors='ignore')[:200]
+                self.report_error(f'curl-impersonate: {err}')
+                return
+
+            if os.path.isfile(self.seg.name):
+                new_size = os.path.getsize(self.seg.name)
+                delta = new_size - start_byte
+                if delta > 0:
+                    self.report_download(delta)
+
+        except Exception as e:
+            log('curl-impersonate error:', e)
+            self.report_error(str(e))
+
+    def _write_protocol_chunk(self, data):
+        if self.d.status != Status.downloading:
+            raise Exception('cancelled')
+
+        if self.seg.size > 0:
+            oversize = self.seg.current_size + len(data) - self.seg.size
+            if oversize > 0:
+                data = data[:-oversize]
+
+        if data:
+            self.file.write(data)
+            self.buffer += len(data)
+
+        if time.time() - self.timer1 >= 1:
+            self.timer1 = time.time()
+            self.report_download(self.buffer)
+            self.buffer = 0
+
+    def _ftp_download(self):
+        from ftplib import FTP, FTP_TLS
+
+        parsed = urlparse(self.seg.url)
+        ftp_cls = FTP_TLS if parsed.scheme == 'ftps' else FTP
+        ftp = ftp_cls()
+        try:
+            ftp.connect(parsed.hostname, parsed.port or 21, timeout=30)
+            ftp.login(unquote(parsed.username or 'anonymous'), unquote(parsed.password or ''))
+            if parsed.scheme == 'ftps':
+                ftp.prot_p()
+
+            start_byte = self.resume_range[0] if self.resume_range else 0
+            rest = start_byte if start_byte else None
+            self.file = open(self.seg.name, self.mode, buffering=0)
+            ftp.retrbinary(f'RETR {unquote(parsed.path)}', self._write_protocol_chunk, blocksize=65536, rest=rest)
+        finally:
+            try:
+                ftp.quit()
+            except Exception:
+                pass
+
+    def _sftp_download(self):
+        try:
+            import paramiko
+        except ImportError as e:
+            raise Exception('paramiko is required for sftp plugin downloads') from e
+
+        parsed = urlparse(self.seg.url)
+        transport = paramiko.Transport((parsed.hostname, parsed.port or 22))
+        try:
+            transport.connect(username=unquote(parsed.username or ''), password=unquote(parsed.password or ''))
+            sftp = paramiko.SFTPClient.from_transport(transport)
+            try:
+                start_byte = self.resume_range[0] if self.resume_range else 0
+                self.file = open(self.seg.name, self.mode, buffering=0)
+                with sftp.file(unquote(parsed.path), 'rb') as remote:
+                    if start_byte:
+                        remote.seek(start_byte)
+                    while True:
+                        chunk = remote.read(65536)
+                        if not chunk:
+                            break
+                        self._write_protocol_chunk(chunk)
+            finally:
+                sftp.close()
+        finally:
+            transport.close()
+
+    def _webdav_download(self, protocol_handler):
+        import urllib.request
+
+        parsed = urlparse(self.seg.url)
+        scheme = 'https' if protocol_handler == 'webdavs' else 'http'
+        url = parsed._replace(scheme=scheme).geturl()
+        headers = dict(getattr(self.d, 'http_headers', {}) or {})
+        range_ = self.resume_range or self.seg.range
+        if range_:
+            headers['Range'] = f'bytes={range_[0]}-{range_[1]}'
+
+        request = urllib.request.Request(url, headers=headers)
+        context = None
+        if scheme == 'https' and config.ignore_ssl_cert:
+            context = ssl._create_unverified_context()
+        self.file = open(self.seg.name, self.mode, buffering=0)
+        with urllib.request.urlopen(request, timeout=30, context=context) as response:
+            while True:
+                chunk = response.read(65536)
+                if not chunk:
+                    break
+                self._write_protocol_chunk(chunk)
+
     def run(self):
         try:
 
@@ -270,28 +411,34 @@ class Worker:
                 log('Seg', self.seg.basename, 'segment has no valid url', '- worker', {self.tag}, log_level=2)
                 raise Exception('invalid url')
 
-            # set options
-            self.set_options()
-
             # make sure target directory exist
             target_directory = os.path.dirname(self.seg.name)
             if not os.path.isdir(target_directory):
                 os.makedirs(target_directory)  # it will also create any intermediate folders in the given path
 
-            # open segment file
-            self.file = open(self.seg.name, self.mode, buffering=0)
+            protocol_handler = getattr(self.d, '_protocol_handler', '')
+            if getattr(self.d, '_use_curl_impersonate', False):
+                self._curl_impersonate_download()
+            elif protocol_handler in ('ftp', 'ftps', 'sftp', 'webdav', 'webdavs'):
+                self._run_protocol_handler(protocol_handler)
+            else:
+                # set options
+                self.set_options()
 
-            # Main Libcurl operation
-            self.c.perform()
+                # open segment file
+                self.file = open(self.seg.name, self.mode, buffering=0)
 
-            # get response code and check for connection errors
-            response_code = self.c.getinfo(pycurl.RESPONSE_CODE)
-            if response_code in range(400, 512):
-                log('Seg', self.seg.basename, 'server refuse connection', response_code, translate_server_code(response_code),
-                    'content type:', self.headers.get('content-type'), log_level=3)
+                # Main Libcurl operation
+                self.c.perform()
 
-                # send error to thread manager, it will reduce connections number to fix this error
-                self.report_error(f'server refuse connection: {response_code}, {translate_server_code(response_code)}')
+                # get response code and check for connection errors
+                response_code = self.c.getinfo(pycurl.RESPONSE_CODE)
+                if response_code in range(400, 512):
+                    log('Seg', self.seg.basename, 'server refuse connection', response_code, translate_server_code(response_code),
+                        'content type:', self.headers.get('content-type'), log_level=3)
+
+                    # send error to thread manager, it will reduce connections number to fix this error
+                    self.report_error(f'server refuse connection: {response_code}, {translate_server_code(response_code)}')
 
         except Exception as e:
             # this error generated when user cancel download, or write function abort
@@ -371,6 +518,3 @@ class Worker:
 
         if quit_flag:
             return -1  # abort
-
-
-

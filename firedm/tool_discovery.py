@@ -25,6 +25,18 @@ def windows_winget_package_root(env: Mapping[str, str] | None = None) -> Path | 
     return root if root.is_dir() else None
 
 
+def env_tool_dirs(env: Mapping[str, str] | None = None) -> list[Path]:
+    env = env or os.environ
+    candidates = []
+    tools_dir = env.get("FIREDM_TOOLS_DIR")
+    if tools_dir:
+        candidates.append(Path(tools_dir))
+    install_dir = env.get("FIREDM_INSTALL_DIR")
+    if install_dir:
+        candidates.append(Path(install_dir) / "tools")
+    return candidates
+
+
 def iter_windows_winget_binaries(binary_name: str, root: str | os.PathLike[str] | None = None) -> Iterator[Path]:
     package_root = Path(root) if root else windows_winget_package_root()
     if not package_root or not package_root.is_dir():
@@ -56,7 +68,7 @@ def resolve_binary_path(
 
     binary = executable_name(name, operating_system)
 
-    for folder in search_dirs:
+    for folder in [*search_dirs, *env_tool_dirs()]:
         if not folder:
             continue
         candidate = Path(folder) / binary

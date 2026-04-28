@@ -383,6 +383,12 @@ def main(argv=sys.argv):
         argv(list): command line arguments vector, argv[0] is the script pathname if known
     """
 
+    if "--native-host" in argv:
+        from .native_host import main as native_host_main
+
+        native_host_main()
+        return
+
     ensure_standard_streams()
 
     guimode = is_gui_mode(argv)

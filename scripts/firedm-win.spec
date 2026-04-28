@@ -84,9 +84,21 @@ hiddenimports = sorted(
         + safe_collect_submodules("yt_dlp")
         + safe_collect_submodules("yt_dlp_ejs")
         + safe_collect_submodules("youtube_dl")
-        + ["_tkinter", "tkinter"]
+        + safe_collect_submodules("firedm.plugins")
+        + ["_tkinter", "tkinter", "firedm.native_host", "firedm.native_messaging"]
     )
 )
+
+native_host_src = project_root / "firedm" / "native_host.py"
+if native_host_src.is_file():
+    datas.append((str(native_host_src), "firedm"))
+
+extension_root = project_root / "browser_extension"
+if extension_root.is_dir():
+    for path in extension_root.rglob("*"):
+        if path.is_file():
+            destination = Path("browser_extension") / path.relative_to(extension_root).parent
+            datas.append((str(path), str(destination)))
 
 a = Analysis(
     [str(main_script)],

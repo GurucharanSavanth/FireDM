@@ -43,8 +43,13 @@ Real GUI interaction, real network downloads, playlist-network behavior, and rea
 
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Dependency strategy: [docs/dependency-strategy.md](docs/dependency-strategy.md)
+- Dependency policy: [docs/release/DEPENDENCY_POLICY.md](docs/release/DEPENDENCY_POLICY.md)
 - Testing: [docs/testing.md](docs/testing.md)
 - Windows build: [docs/windows-build.md](docs/windows-build.md)
+- Build ID policy: [docs/release/BUILD_ID_POLICY.md](docs/release/BUILD_ID_POLICY.md)
+- GitHub releases: [docs/release/GITHUB_RELEASES.md](docs/release/GITHUB_RELEASES.md)
+- Windows installer release: [docs/release/WINDOWS_INSTALLER.md](docs/release/WINDOWS_INSTALLER.md)
+- Windows portable package: [docs/release/WINDOWS_PORTABLE.md](docs/release/WINDOWS_PORTABLE.md)
 - Known issues: [docs/known-issues.md](docs/known-issues.md)
 - Legacy refactor plan: [docs/legacy-refactor-plan.md](docs/legacy-refactor-plan.md)
 - Windows bootstrap: [bootstrap/windows-dev-setup.md](bootstrap/windows-dev-setup.md)
@@ -115,10 +120,43 @@ Wheel/sdist:
 Windows PyInstaller package:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64
 ```
 
-The preferred Windows distributor is the PyInstaller one-folder build in `dist\FireDM`. Historical AppImage and old executable scripts remain for reference only.
+Dependency/toolchain preflight only:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\release\check_dependencies.py --arch x64 --channel dev
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64 -ValidateOnly
+```
+
+One-click local Windows installer build:
+
+```powershell
+.\build-release.bat
+```
+
+The wrapper defaults to the unsigned `dev` channel and auto-generates the next
+build ID in `YYYYMMDD_V{N}` form, for example `20260427_V1`. Use
+`.\build-release.bat stable` only for a maintainer-controlled build with
+signing configured.
+
+Explicit rebuild/test examples:
+
+```powershell
+.\build-release.bat dev --date 20260427
+.\build-release.bat dev --build-id 20260427_V7
+```
+
+This writes the x64 installer, portable zip, release notes, manifest, license
+inventory, dependency status report, and SHA256 checksums under
+`dist\installers\`, `dist\portable\`, `dist\licenses\`, and
+`dist\checksums\`.
+
+The preferred Windows distributor is the installed-tree payload generated from
+the PyInstaller one-folder build, then installed by
+`dist\installers\FireDM_Setup_<build_id>_<channel>_win_x64.exe`. Historical
+AppImage and old executable scripts remain for reference only.
 
 ## PyInstaller Notes
 
@@ -155,7 +193,7 @@ Deno is also external by default for yt-dlp JavaScript-runtime support. Keep Den
 Current workflows:
 
 - `windows-smoke.yml`: Windows source install, tests, scoped Ruff, package build, PyInstaller package smoke, artifact upload.
-- `draft-release.yml`: tag/manual Windows draft-release package build and release artifact creation.
+- `draft-release.yml`: tag/manual Windows x64 installer lane using `scripts/release/build_windows.py --arch x64`, uploads build-ID artifacts, and dry-runs GitHub release creation unless manual `publish_release=true` or a `build-YYYYMMDD_VN` tag run is used. Manual runs default to `dev`; tag builds force `stable` and require signing configuration.
 - `pypi-release.yml`: PyPI package build, `twine check`, and trusted-publishing upload path.
 
 CI currently targets Python 3.10 because that is the only verified runtime. Add 3.11/3.12 to CI only when the project is ready to fix and support failures found on those versions.
@@ -186,6 +224,9 @@ Before publishing a Windows release, run:
 .\.venv\Scripts\python.exe -m build --no-isolation
 .\.venv\Scripts\python.exe -m twine check dist\*.whl dist\*.tar.gz
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
+.\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
+.\.venv\Scripts\python.exe scripts\release\validate_portable.py --archive dist\portable\<portable>.zip
+.\.venv\Scripts\python.exe scripts\release\github_release.py --manifest dist\release-manifest.json
 .\dist\FireDM\firedm.exe --help
 .\dist\FireDM\firedm.exe --imports-only
 .\dist\FireDM\FireDM-GUI.exe
