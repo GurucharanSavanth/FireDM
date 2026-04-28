@@ -4,6 +4,7 @@
 
 ```powershell
 .\.venv\Scripts\python.exe -m compileall .\firedm .\scripts\release
+.\.venv\Scripts\python.exe scripts\release\check_dependencies.py --arch x64 --channel dev --skip-portable
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
 ```
@@ -12,6 +13,7 @@
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\release\validate_payload.py --arch x64
+.\.venv\Scripts\python.exe scripts\release\validate_portable.py --archive dist\portable\FireDM_<build_id>_dev_win_x64_portable.zip
 .\.venv\Scripts\python.exe scripts\release\validate_installer.py --artifact dist\installers\FireDM_Setup_<build_id>_dev_win_x64.exe --test-repair --test-uninstall --test-upgrade --test-downgrade-block
 .\.venv\Scripts\python.exe scripts\release\smoke_installed_gui.py --install-root dist\payloads\win-x64\FireDM --timeout 20 --headless-safe --no-network
 ```
@@ -27,9 +29,11 @@
 
 ## Release Artifacts
 
-- `dist\installers\FireDM_Setup_<build_id>_dev_win_x64.exe`
+- `dist\installers\FireDM_Setup_<build_id>_dev_win_x64\FireDM_Setup_<build_id>_dev_win_x64.exe`
+- `dist\installers\FireDM_Setup_<build_id>_dev_win_x64\FireDM_<build_id>_dev_win_x64_payload.zip`
 - `dist\portable\FireDM_<build_id>_dev_win_x64_portable.zip`
 - `dist\FireDM_release_manifest_<build_id>.json`
+- `dist\dependency-status_<build_id>.json`
 - `dist\checksums\SHA256SUMS_<build_id>.txt`
 - `dist\licenses\license-inventory_<build_id>.json`
 

@@ -18,17 +18,16 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
 import time
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SMOKE_DIR = REPO_ROOT / "artifacts" / "smoke"
-SMOKE_DIR.mkdir(parents=True, exist_ok=True)
+SMOKE_DIR = Path(os.environ.get("FIREDM_SMOKE_ARTIFACTS_DIR", REPO_ROOT / "artifacts" / "smoke"))
 sys.path.insert(0, str(REPO_ROOT))
 
 
@@ -164,6 +163,13 @@ def playlist_smoke(log):
 
 
 def main() -> int:
+    global SMOKE_DIR
+    parser = argparse.ArgumentParser(description="Run synthetic FireDM video pipeline smoke checks.")
+    parser.add_argument("--output-dir", default=str(SMOKE_DIR))
+    args = parser.parse_args()
+    SMOKE_DIR = Path(args.output_dir).resolve()
+    SMOKE_DIR.mkdir(parents=True, exist_ok=True)
+
     single_log: list[str] = []
     playlist_log: list[str] = []
 

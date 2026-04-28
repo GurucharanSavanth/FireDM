@@ -91,6 +91,13 @@ def verify_checksums(manifest: dict[str, Any], manifest_path: Path) -> Path:
         raise SystemExit(f"Checksum file name does not include build ID {build_id}: {checksums.name}")
     if not checksums.is_file():
         raise SystemExit(f"Checksum file missing: {checksums}")
+    allowed_targets = {
+        str(item.get("path"))
+        for item in manifest.get("artifacts", [])
+        if isinstance(item, dict) and isinstance(item.get("path"), str)
+    }
+    canonical_manifest = release_manifest_name(build_id)
+    allowed_targets.add(canonical_manifest)
     seen_build_id = False
     for raw_line in checksums.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -112,6 +119,9 @@ def verify_checksums(manifest: dict[str, Any], manifest_path: Path) -> Path:
             raise SystemExit(f"Checksum mismatch for {rel}: expected {expected_sha}, got {actual_sha}")
         if build_id not in Path(rel).name:
             raise SystemExit(f"Checksum target missing build ID {build_id}: {rel}")
+        normalized_rel = Path(rel).as_posix()
+        if normalized_rel not in allowed_targets:
+            raise SystemExit(f"Checksum target is not listed in release manifest: {rel}")
     if not seen_build_id:
         raise SystemExit(f"Checksum file missing build_id header: {build_id}")
     return checksums

@@ -1,11 +1,17 @@
 param(
     [string]$PythonExe,
+    [string]$Channel = "dev",
+    [ValidateSet("x64", "x86", "arm64")][string]$Arch = "x64",
     [switch]$SkipTests,
     [switch]$SkipLint,
     [switch]$SkipPythonPackage,
     [switch]$SkipTwineCheck,
     [switch]$SmokeGui,
     [switch]$Release,
+    [switch]$PayloadOnly,
+    [switch]$ValidateOnly,
+    [switch]$Clean,
+    [switch]$InstallLocalDeps,
     [string]$ReleaseDir = "release",
     [string]$BuildId,
     [string]$BuildDate,
@@ -249,10 +255,33 @@ function Invoke-ScopedLint {
         "firedm\tool_discovery.py",
         "firedm\setting.py",
         "firedm\update.py",
+        "scripts\release",
         "tests"
     )
 
     Invoke-Checked $PythonExe (@("-m", "ruff", "check") + $lintTargets)
+}
+
+function Invoke-Compileall {
+    Invoke-Checked $PythonExe @("-m", "compileall", ".\firedm", ".\scripts")
+}
+
+function Invoke-DependencyPreflight {
+    param([switch]$SkipPortable)
+
+    $args = @(
+        "scripts\release\check_dependencies.py",
+        "--arch",
+        $Arch,
+        "--channel",
+        $Channel,
+        "--build-id",
+        $BuildId
+    )
+    if ($SkipPortable) {
+        $args += "--skip-portable"
+    }
+    Invoke-Checked $PythonExe $args
 }
 
 function New-ReleasePackage {
@@ -475,7 +504,53 @@ $BuildId = $BuildInfo.build_id
 Write-Host "Build ID:" $BuildId
 Write-Host "Release tag:" $BuildInfo.tag
 
-Invoke-Checked $PythonExe @("-m", "pip", "install", "--no-build-isolation", "-e", ".[dev,build]")
+if ($Arch -ne "x64") {
+    throw "$Arch build is blocked in this checkout; only x64 is implemented."
+}
+
+if ($PublishDraftRelease) {
+    throw "scripts\windows-build.ps1 does not publish GitHub releases. Use scripts\release\github_release.py --publish after review."
+}
+
+if ($Clean) {
+    Remove-RepoDirectoryIfExists -Path (Join-Path $RepoRoot "build")
+    Remove-RepoDirectoryIfExists -Path $DistFireDM
+}
+
+if ($InstallLocalDeps) {
+    Invoke-Checked $PythonExe @("-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel")
+    Invoke-Checked $PythonExe @("-m", "pip", "install", "--no-build-isolation", "-e", ".[dev,build]")
+}
+
+if (-not $PayloadOnly) {
+    Invoke-DependencyPreflight -SkipPortable
+    Invoke-Compileall
+    if (-not $SkipTests) {
+        Invoke-Checked $PythonExe @("-m", "pytest", "-q")
+    }
+    if (-not $SkipLint) {
+        Invoke-ScopedLint
+    }
+    if ($ValidateOnly) {
+        Write-Host "Validation-only dependency/build checks passed."
+        return
+    }
+
+    $laneArgs = @(
+        "scripts\release\build_windows.py",
+        "--arch",
+        $Arch,
+        "--channel",
+        $Channel,
+        "--build-id",
+        $BuildId,
+        "--allow-overwrite"
+    )
+    Invoke-Checked $PythonExe $laneArgs
+    Write-Host "Windows release lane completed."
+    Write-Host "Artifacts are under dist\installers, dist\portable, dist\checksums, and dist\release-manifest.json."
+    return
+}
 
 $testsStatus = "skipped"
 $lintStatus = "skipped"
@@ -514,7 +589,7 @@ if (-not $SkipTwineCheck) {
 }
 
 Stop-PackagedProcesses
-Remove-RepoDirectoryIfExists -Path (Join-Path $RepoRoot "build")
+Remove-RepoDirectoryIfExists -Path (Join-Path $RepoRoot "build\pyinstaller")
 Remove-RepoDirectoryIfExists -Path $DistFireDM
 
 Invoke-Checked $PythonExe @(

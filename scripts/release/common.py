@@ -199,3 +199,7 @@ def license_inventory_name(build_id: str) -> str:
 
 def release_notes_name(build_id: str) -> str:
     return f"FireDM_release_notes_{build_id}.md"
+
+
+def dependency_status_name(build_id: str) -> str:
+    return f"dependency-status_{build_id}.json"

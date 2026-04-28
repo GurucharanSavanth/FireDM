@@ -73,6 +73,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e ".[dev,build]"
 
+      - name: Dependency preflight
+        run: python scripts/release/check_dependencies.py --arch x64 --channel dev --skip-portable
+
+      - name: Compile source and scripts
+        run: python -m compileall firedm scripts
+
       - name: Run tests
         run: python -m pytest -q
 
@@ -152,12 +158,15 @@ jobs:
         with:
           name: FireDM-Windows-${{ env.build_id }}
           path: |
-            dist/installers/*${{ env.build_id }}*.exe
+            dist/installers/**/*${{ env.build_id }}*.exe
             dist/installers/*${{ env.build_id }}*.manifest.json
+            dist/installers/**/*${{ env.build_id }}*.manifest.json
+            dist/installers/**/*${{ env.build_id }}*payload.zip
             dist/portable/*${{ env.build_id }}*.zip
             dist/checksums/SHA256SUMS_${{ env.build_id }}.txt
             dist/FireDM_release_manifest_${{ env.build_id }}.json
             dist/FireDM_release_notes_${{ env.build_id }}.md
+            dist/dependency-status_${{ env.build_id }}.json
             dist/licenses/license-inventory_${{ env.build_id }}.json
           if-no-files-found: error
 

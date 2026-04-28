@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 from build_id import select_build_id
 from common import (
@@ -12,6 +13,7 @@ from common import (
     INSTALLERS_DIR,
     LICENSES_DIR,
     checksum_file_name,
+    dependency_status_name,
     dist_ref,
     file_sha256,
     installer_manifest_file_name,
@@ -62,6 +64,23 @@ def main() -> None:
     print(f"Build ID: {build_id}")
     print(f"Tag: {selection.tag}")
     print(f"Release name: {selection.release_name}")
+    dependency_status = DIST_DIR / dependency_status_name(build_id)
+    run_checked(
+        [
+            sys.executable,
+            str(repo_path("scripts", "release", "check_dependencies.py")),
+            "--arch",
+            args.arch,
+            "--channel",
+            args.channel,
+            "--build-id",
+            build_id,
+            "--skip-portable",
+            "--json",
+            "--output",
+            str(dependency_status),
+        ]
+    )
 
     run_script("build_payload.py", "--arch", args.arch, "--channel", args.channel, *passthrough)
     run_script("validate_payload.py", "--arch", args.arch)
@@ -69,8 +88,11 @@ def main() -> None:
     run_script("collect_licenses.py", "--build-id", build_id)
 
     version = read_version()
-    installer = INSTALLERS_DIR / installer_name(build_id, args.channel, args.arch)
+    installer_file_name = installer_name(build_id, args.channel, args.arch)
+    installer = INSTALLERS_DIR / Path(installer_file_name).stem / installer_file_name
+    portable = DIST_DIR / "portable" / portable_name(build_id, args.channel, args.arch)
     if not args.skip_validation:
+        run_script("validate_portable.py", "--archive", str(portable))
         run_script(
             "validate_installer.py",
             "--artifact",
@@ -81,10 +103,10 @@ def main() -> None:
             "--test-downgrade-block",
         )
 
-    portable = DIST_DIR / "portable" / portable_name(build_id, args.channel, args.arch)
     installer_sha256 = file_sha256(installer)
     portable_sha256 = file_sha256(portable) if portable.is_file() else ""
     installer_sidecar = INSTALLERS_DIR / installer_manifest_file_name(build_id, args.channel, args.arch)
+    installer_payload = installer.parent / f"FireDM_{build_id}_{args.channel}_win_{args.arch}_payload.zip"
     installer_metadata = {}
     if installer_sidecar.is_file():
         installer_metadata = json.loads(installer_sidecar.read_text(encoding="utf-8"))
@@ -128,6 +150,7 @@ def main() -> None:
         },
         "validation": {
             "payload": "passed",
+            "portable": "skipped" if args.skip_validation else "passed",
             "installer": "skipped" if args.skip_validation else "passed",
         },
         "artifacts": [
@@ -146,6 +169,14 @@ def main() -> None:
                 "arch": args.arch,
                 "size": installer_sidecar.stat().st_size if installer_sidecar.is_file() else 0,
                 "sha256": file_sha256(installer_sidecar) if installer_sidecar.is_file() else "",
+                "signed": False,
+            },
+            {
+                "kind": "installerPayload",
+                "path": dist_ref(installer_payload),
+                "arch": args.arch,
+                "size": installer_payload.stat().st_size if installer_payload.is_file() else 0,
+                "sha256": file_sha256(installer_payload) if installer_payload.is_file() else "",
                 "signed": False,
             },
             {
@@ -172,8 +203,19 @@ def main() -> None:
                 "sha256": file_sha256(release_body),
                 "signed": False,
             },
+            {
+                "kind": "dependencyStatus",
+                "path": dist_ref(dependency_status),
+                "arch": args.arch,
+                "size": dependency_status.stat().st_size if dependency_status.is_file() else 0,
+                "sha256": file_sha256(dependency_status) if dependency_status.is_file() else "",
+                "signed": False,
+            },
         ],
         "checksumsPath": dist_ref(checksums),
+        "dependencyStatusPath": dist_ref(dependency_status),
+        "ffmpegBundled": False,
+        "ffmpegPolicy": "not bundled; detected as optional external tool",
         "compatibilityAliases": {
             "releaseManifest": "release-manifest.json",
             "checksums": "checksums/SHA256SUMS.txt",

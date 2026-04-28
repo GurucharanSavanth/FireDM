@@ -37,6 +37,18 @@ def load_manifest() -> dict:
         raise RuntimeError(f"Installer manifest is corrupt: {manifest_path}") from exc
 
 
+def locate_payload_zip(manifest: dict) -> Path:
+    payload_name = manifest["payloadZip"]
+    candidates = [runtime_dir() / payload_name]
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys.executable).resolve().parent / payload_name)
+    candidates.append(Path.cwd() / payload_name)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(f"Installer payload missing: {payload_name}")
+
+
 def default_install_dir() -> Path:
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
@@ -368,6 +380,12 @@ def copy_self_to_install_dir(install_dir: Path) -> Path:
     destination = installer_dir / "FireDM-Uninstall.exe"
     if getattr(sys, "frozen", False):
         shutil.copy2(sys.executable, destination)
+        source_internal = Path(sys.executable).resolve().parent / "_internal"
+        if source_internal.is_dir():
+            destination_internal = installer_dir / "_internal"
+            if destination_internal.exists():
+                shutil.rmtree(destination_internal)
+            shutil.copytree(source_internal, destination_internal)
     else:
         destination.with_suffix(".txt").write_text(
             "Source-mode installer validation did not copy a frozen uninstaller.\n",
@@ -443,9 +461,7 @@ def install(args: argparse.Namespace, manifest: dict) -> int:
         if not args.install_dir and installed_location:
             install_dir = assert_safe_root(Path(installed_location))
 
-    payload_zip = runtime_dir() / manifest["payloadZip"]
-    if not payload_zip.is_file():
-        raise RuntimeError(f"Installer payload missing: {payload_zip}")
+    payload_zip = locate_payload_zip(manifest)
     verify_payload_zip(payload_zip, manifest)
 
     backup_state = load_state(install_dir)

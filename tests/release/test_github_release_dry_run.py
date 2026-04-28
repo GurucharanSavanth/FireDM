@@ -107,6 +107,17 @@ def test_checksum_mismatch_fails(tmp_path):
         github_release.build_plan(manifest)
 
 
+def test_checksum_target_not_in_manifest_fails(tmp_path):
+    manifest = create_manifest_tree(tmp_path)
+    extra = write(manifest.parent / "portable" / "FireDM_20260427_V1_dev_win_x64_extra.zip", "extra")
+    checksums = manifest.parent / "checksums" / "SHA256SUMS_20260427_V1.txt"
+    with checksums.open("a", encoding="utf-8") as handle:
+        handle.write(f"{file_sha256(extra)}  {extra.relative_to(manifest.parent).as_posix()}\n")
+
+    with pytest.raises(SystemExit, match="not listed in release manifest"):
+        github_release.build_plan(manifest)
+
+
 def test_stale_artifact_without_build_id_fails(tmp_path):
     manifest = create_manifest_tree(tmp_path)
     payload = json.loads(manifest.read_text(encoding="utf-8"))

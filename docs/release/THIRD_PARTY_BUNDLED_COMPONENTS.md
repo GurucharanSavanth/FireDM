@@ -19,6 +19,7 @@ Bundled through the current PyInstaller payload:
 - awesometkinter
 - Tcl/Tk runtime files
 - dependent DLLs collected by PyInstaller
+- `build-metadata.json`, `payload-manifest.json`, and dependency status JSON
 
 Blocked from bundling in this pass:
 - FFmpeg

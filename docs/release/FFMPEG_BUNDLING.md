@@ -39,3 +39,11 @@ Before bundling FFmpeg/ffprobe:
 
 Users still need FFmpeg externally if they use workflows requiring media merge, conversion, metadata writing, or HLS post-processing.
 
+## Current Validation Behavior
+
+changed: `scripts/release/check_dependencies.py` and
+`scripts/release/validate_portable.py` classify missing FFmpeg/ffprobe as
+optional warnings, not package failures. This matches the current release
+claim: portable/installer launch readiness is validated, but full media
+post-processing readiness is blocked until FFmpeg/ffprobe are either detected
+externally during manual QA or bundled under the requirements above.

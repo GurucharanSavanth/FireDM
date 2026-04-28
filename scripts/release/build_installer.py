@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import zipfile
 from pathlib import Path
@@ -93,7 +94,8 @@ def build_installer(args: argparse.Namespace) -> Path:
         raise SystemExit(f"Payload missing: {payload}. Run build_payload.py first.")
 
     work = clean_dir(BUILD_DIR / "installer" / f"win-{args.arch}")
-    payload_zip = work / payload_zip_name(args.build_id, args.channel, args.arch)
+    payload_sidecar_name = payload_zip_name(args.build_id, args.channel, args.arch)
+    payload_zip = work / payload_sidecar_name
     zip_payload(payload, payload_zip)
 
     manifest = build_metadata(args.arch, args.channel, args.build_id)
@@ -129,9 +131,27 @@ def build_installer(args: argparse.Namespace) -> Path:
 
     ensure_dir(INSTALLERS_DIR)
     output_name = installer_name(args.build_id, args.channel, args.arch)
-    installer = INSTALLERS_DIR / output_name
+    stale_flat_installer = INSTALLERS_DIR / output_name
+    stale_flat_payload = INSTALLERS_DIR / payload_sidecar_name
+    for stale_path in (stale_flat_installer, stale_flat_payload):
+        if stale_path.exists():
+            if not args.allow_overwrite:
+                raise SystemExit(f"Stale flat installer artifact already exists: {stale_path}")
+            if stale_path.is_dir():
+                shutil.rmtree(stale_path)
+            else:
+                stale_path.unlink()
+    installer_dir = INSTALLERS_DIR / Path(output_name).stem
+    if installer_dir.exists() and not args.allow_overwrite:
+        raise SystemExit(f"Installer bundle already exists: {installer_dir}")
+    if installer_dir.exists():
+        shutil.rmtree(installer_dir)
+    installer = installer_dir / output_name
     if installer.exists() and not args.allow_overwrite:
         raise SystemExit(f"Installer already exists: {installer}")
+    sidecar_payload = installer_dir / payload_sidecar_name
+    if sidecar_payload.exists() and not args.allow_overwrite:
+        raise SystemExit(f"Installer payload sidecar already exists: {sidecar_payload}")
     run_checked(
         [
             os.fspath(repo_path(".venv", "Scripts", "python.exe")) if (repo_path(".venv", "Scripts", "python.exe")).exists() else os.fspath(Path(os.sys.executable)),
@@ -139,7 +159,8 @@ def build_installer(args: argparse.Namespace) -> Path:
             "PyInstaller",
             "--clean",
             "--noconfirm",
-            "--onefile",
+            "--noupx",
+            "--onedir",
             "--name",
             Path(output_name).stem,
             "--distpath",
@@ -149,19 +170,21 @@ def build_installer(args: argparse.Namespace) -> Path:
             "--specpath",
             os.fspath(work),
             "--add-data",
-            f"{payload_zip}{os.pathsep}.",
-            "--add-data",
             f"{manifest_path}{os.pathsep}.",
             os.fspath(repo_path("scripts", "release", "installer_bootstrap.py")),
         ]
     )
+    shutil.copy2(payload_zip, sidecar_payload)
     if not installer.is_file():
         raise SystemExit(f"Expected installer was not created: {installer}")
 
     signature = maybe_sign_artifact(installer)
     manifest["installer"] = dist_ref(installer)
+    manifest["installerPayload"] = dist_ref(sidecar_payload)
     manifest["installerSize"] = installer.stat().st_size
     manifest["installerSha256"] = file_sha256(installer)
+    manifest["installerPayloadSize"] = sidecar_payload.stat().st_size
+    manifest["installerPayloadSha256"] = file_sha256(sidecar_payload)
     manifest.update(signature)
     write_json(work / "built-installer-manifest.json", manifest)
     write_json(INSTALLERS_DIR / installer_manifest_file_name(args.build_id, args.channel, args.arch), manifest)

@@ -30,6 +30,7 @@ title: FireDM YYYYMMDD_V{N}
 
 Before creating a release, the script verifies:
 - manifest has a valid `build_id`
+- dependency status artifact exists when listed by the manifest
 - every manifest artifact exists
 - every artifact filename contains the build ID
 - artifact SHA256 values match the manifest
@@ -46,3 +47,6 @@ set `publish_release=true` only when the maintainer intends to create/upload a
 GitHub draft release. Tag builds use `build-YYYYMMDD_VN` tags and force the
 stable channel, so signing must be configured.
 
+Workflow artifact uploads include installer EXE, installer sidecar manifest,
+portable ZIP, dependency status JSON, release manifest, release notes, license
+inventory, and build-ID-scoped checksums.

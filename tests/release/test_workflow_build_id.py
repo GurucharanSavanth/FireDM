@@ -20,6 +20,9 @@ def test_draft_release_workflow_build_id_inputs_and_triggers():
     text = workflow_path.read_text(encoding="utf-8")
     assert "scripts\\release\\build_windows.py" in text
     assert "scripts\\release\\github_release.py" in text
+    assert "scripts/release/check_dependencies.py" in text
+    assert "dependency-status_${{ env.build_id }}.json" in text
+    assert "payload.zip" in text
     assert "publish_release" in text
     assert "FireDM_release_manifest_${{ env.build_id }}.json" in text
 
@@ -29,11 +32,19 @@ def test_windows_build_script_uses_build_id_release_names():
 
     assert "[string]$BuildId" in script
     assert "[string]$BuildDate" in script
+    assert "[string]$Channel" in script
+    assert "[ValidateSet(\"x64\", \"x86\", \"arm64\")][string]$Arch" in script
+    assert "[switch]$PayloadOnly" in script
+    assert "[switch]$ValidateOnly" in script
+    assert "[switch]$InstallLocalDeps" in script
     assert "scripts\\release\\build_id.py" in script
+    assert "scripts\\release\\check_dependencies.py" in script
+    assert "scripts\\release\\build_windows.py" in script
     assert "FireDM-$BuildId-windows-x64" in script
     assert "SHA256SUMS_$BuildId.txt" in script
     assert "FireDM_release_manifest_$BuildId.json" in script
     assert "FireDM_release_notes_$BuildId.md" in script
     assert "build-metadata.json" in script
     assert "$BuildInfo.tag" in script
+    assert "does not publish GitHub releases" in script
     assert "FireDM-$Version-windows-x64" not in script

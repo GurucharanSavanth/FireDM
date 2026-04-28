@@ -11,6 +11,7 @@ on:
       - "firedm.py"
       - "scripts/firedm-win.spec"
       - "scripts/windows-build.ps1"
+      - "scripts/release/**"
       - ".github/workflows/windows-smoke.yml"
   pull_request:
     paths:
@@ -22,6 +23,7 @@ on:
       - "firedm.py"
       - "scripts/firedm-win.spec"
       - "scripts/windows-build.ps1"
+      - "scripts/release/**"
       - ".github/workflows/windows-smoke.yml"
   workflow_dispatch:
 
@@ -50,6 +52,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e ".[dev,build]"
 
+      - name: Dependency preflight
+        run: python scripts/release/check_dependencies.py --arch x64 --channel dev --skip-portable
+
+      - name: Compile source and scripts
+        run: python -m compileall firedm scripts
+
       - name: Run tests
         run: python -m pytest -q
 
@@ -70,7 +78,7 @@ jobs:
 
       - name: Build Windows distribution
         shell: pwsh
-        run: .\scripts\windows-build.ps1 -PythonExe (Get-Command python).Source -SkipTests
+        run: .\scripts\windows-build.ps1 -PythonExe (Get-Command python).Source -Channel dev -Arch x64 -SkipTests -SkipLint
 
       - name: Smoke source and packaged entrypoints
         shell: pwsh
@@ -78,6 +86,8 @@ jobs:
           python -m firedm --help
           python firedm.py --imports-only
           .\dist\FireDM\firedm.exe --help
+          $portable = Get-ChildItem dist\portable\*_portable.zip | Select-Object -First 1
+          python scripts\release\validate_portable.py --archive $portable.FullName
 
       - name: Upload Windows distribution
         uses: actions/upload-artifact@v7

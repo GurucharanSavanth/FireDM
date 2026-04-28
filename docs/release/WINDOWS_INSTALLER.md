@@ -13,6 +13,12 @@ Build the x64 installer:
 .\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
 ```
 
+Preflight only:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\release\check_dependencies.py --arch x64 --channel dev --skip-portable
+```
+
 One-click wrapper:
 
 ```powershell
@@ -29,8 +35,16 @@ explicit maintainer rebuild.
 Primary output:
 
 ```text
-dist\installers\FireDM_Setup_<build_id>_dev_win_x64.exe
+dist\installers\FireDM_Setup_<build_id>_dev_win_x64\FireDM_Setup_<build_id>_dev_win_x64.exe
+dist\installers\FireDM_Setup_<build_id>_dev_win_x64\FireDM_<build_id>_dev_win_x64_payload.zip
+dist\portable\FireDM_<build_id>_dev_win_x64_portable.zip
+dist\dependency-status_<build_id>.json
 ```
+
+The installer is a PyInstaller one-dir bundle. Keep the EXE, `_internal`
+runtime folder, and payload ZIP sidecar together when validating or
+distributing the installer lane. The bootstrapper verifies the sidecar SHA256
+before extraction.
 
 ## Install Behavior
 

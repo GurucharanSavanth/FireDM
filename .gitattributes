@@ -34,6 +34,7 @@
 # Text logs kept as evidence should be stable.
 *.txt text eol=crlf
 *.log text eol=lf
+artifacts/smoke/*.log text eol=crlf
 
 # Binary assets and generated packages.
 *.png binary

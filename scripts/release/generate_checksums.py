@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from build_id import validate_build_id
@@ -19,18 +20,33 @@ from common import (
 
 
 def publishable_files(root: Path, build_id: str) -> list[Path]:
+    release_manifest = DIST_DIR / release_manifest_name(build_id)
+    if release_manifest.is_file():
+        manifest = json.loads(release_manifest.read_text(encoding="utf-8"))
+        candidates = [release_manifest]
+        for artifact in manifest.get("artifacts", []):
+            if not isinstance(artifact, dict):
+                continue
+            rel = artifact.get("path")
+            if not isinstance(rel, str) or not rel:
+                continue
+            path = DIST_DIR / rel
+            if path.is_file():
+                candidates.append(path)
+        return sorted({path.resolve() for path in candidates if root == path.resolve() or root in path.resolve().parents})
+
     candidates = []
     for folder, patterns in (
-        (INSTALLERS_DIR, (f"*{build_id}*.exe", f"*{build_id}*.manifest.json")),
+        (INSTALLERS_DIR, (f"*{build_id}*.exe", f"*{build_id}*.manifest.json", f"*{build_id}*payload.zip")),
         (PORTABLE_DIR, (f"*{build_id}*.zip",)),
         (LICENSES_DIR, (f"license-inventory_{build_id}.json",)),
     ):
         if not folder.is_dir():
             continue
         for pattern in patterns:
-            candidates.extend(path for path in folder.glob(pattern) if path.is_file())
+            candidates.extend(path for path in folder.rglob(pattern) if path.is_file())
 
-    for name in (release_manifest_name(build_id), release_notes_name(build_id)):
+    for name in (release_manifest_name(build_id), release_notes_name(build_id), f"dependency-status_{build_id}.json"):
         path = DIST_DIR / name
         if path.is_file():
             candidates.append(path)

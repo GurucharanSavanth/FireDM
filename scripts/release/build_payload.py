@@ -36,7 +36,7 @@ def zip_directory(source: Path, destination: Path, root_name: str | None = None)
             zf.write(path, rel.as_posix())
 
 
-def copy_payload(arch: str, build_id: str, allow_overwrite: bool = False) -> Path:
+def copy_payload(arch: str, channel: str, build_id: str, allow_overwrite: bool = False) -> Path:
     if arch != "x64":
         raise SystemExit(f"{arch} payload build is blocked in this checkout; only x64 is implemented.")
 
@@ -47,10 +47,15 @@ def copy_payload(arch: str, build_id: str, allow_overwrite: bool = False) -> Pat
         "Bypass",
         "-File",
         str(repo_path("scripts", "windows-build.ps1")),
+        "-Channel",
+        channel,
+        "-Arch",
+        arch,
         "-SkipTests",
         "-SkipLint",
         "-SkipPythonPackage",
         "-SkipTwineCheck",
+        "-PayloadOnly",
         "-BuildId",
         build_id,
     ]
@@ -87,7 +92,7 @@ def add_portable_readme(payload: Path, version: str, arch: str) -> None:
 
 def build_payload(args: argparse.Namespace) -> dict:
     version = read_version()
-    payload = copy_payload(args.arch, args.build_id, args.allow_overwrite)
+    payload = copy_payload(args.arch, args.channel, args.build_id, args.allow_overwrite)
     add_portable_readme(payload, version, args.arch)
 
     files = []
@@ -116,6 +121,7 @@ def build_payload(args: argparse.Namespace) -> dict:
         }
     )
     write_json(payload_manifest_path(args.arch), metadata)
+    write_json(payload / "payload-manifest.json", metadata)
 
     portable_dir = ensure_dir(PORTABLE_DIR)
     portable_zip = portable_dir / portable_name(args.build_id, args.channel, args.arch)

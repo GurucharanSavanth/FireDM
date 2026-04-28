@@ -17,10 +17,25 @@ Reasons:
 ## Build command
 
 ```powershell
-.\scripts\windows-build.ps1
+.\scripts\windows-build.ps1 -Channel dev -Arch x64
 ```
 
-The script installs the build extra with `pip install --no-build-isolation -e ".[build]"` and uses `python -m build --no-isolation` for the local package build, so the Windows package path uses the already-bootstrapped repo environment instead of creating temporary build environments that may need network access.
+The script uses the already-bootstrapped repo environment by default. It does
+not install packages unless `-InstallLocalDeps` is passed, and that install is
+limited to the repo-local Python environment selected by `-PythonExe` or
+`.venv\Scripts\python.exe`.
+
+Validation-only preflight:
+
+```powershell
+.\scripts\windows-build.ps1 -Channel dev -Arch x64 -ValidateOnly
+```
+
+Explicit local dependency refresh:
+
+```powershell
+.\scripts\windows-build.ps1 -Channel dev -Arch x64 -InstallLocalDeps
+```
 
 Optional GUI smoke in the same script:
 
@@ -42,8 +57,9 @@ The one-click wrapper runs:
 
 That installer release path generates the next `YYYYMMDD_V{N}` build ID, builds
 the PyInstaller one-dir payload, validates
-the payload, creates the x64 installer bootstrapper, validates silent install,
-repair, and uninstall, collects bundled-component license metadata, writes a
+the payload and portable ZIP, creates the x64 installer bootstrapper, validates
+silent install, repair, uninstall, upgrade, and downgrade blocking, collects
+bundled-component license metadata, writes a dependency status report, writes a
 release manifest, and generates SHA256 checksums.
 
 ## Output
@@ -67,13 +83,19 @@ dist\licenses\
 ```
 
 Expected release files:
-- `FireDM_Setup_<build_id>_<channel>_win_x64.exe`
+- `FireDM_Setup_<build_id>_<channel>_win_x64\FireDM_Setup_<build_id>_<channel>_win_x64.exe`
+- `FireDM_Setup_<build_id>_<channel>_win_x64\FireDM_<build_id>_<channel>_win_x64_payload.zip`
 - `FireDM_Setup_<build_id>_<channel>_win_x64.manifest.json`
 - `FireDM_<build_id>_<channel>_win_x64_portable.zip`
 - `SHA256SUMS_<build_id>.txt`
 - `FireDM_release_notes_<build_id>.md`
 - `FireDM_release_manifest_<build_id>.json`
+- `dependency-status_<build_id>.json`
 - `license-inventory_<build_id>.json`
+
+The installer is a PyInstaller one-dir bundle. Keep the EXE, `_internal`
+runtime folder, and payload ZIP sidecar together; the installer verifies the
+payload SHA256 before extraction.
 
 Stable compatibility aliases are also written: `release-manifest.json`,
 `release-body.md`, `checksums\SHA256SUMS.txt`, and
@@ -84,6 +106,7 @@ Stable compatibility aliases are also written: `release-manifest.json`,
 ```powershell
 .\dist\FireDM\firedm.exe --help
 .\dist\FireDM\firedm.exe --imports-only
+.\.venv\Scripts\python.exe scripts\release\validate_portable.py --archive dist\portable\<portable>.zip
 Start-Process .\dist\FireDM\FireDM-GUI.exe
 ```
 

@@ -43,6 +43,7 @@ Real GUI interaction, real network downloads, playlist-network behavior, and rea
 
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Dependency strategy: [docs/dependency-strategy.md](docs/dependency-strategy.md)
+- Dependency policy: [docs/release/DEPENDENCY_POLICY.md](docs/release/DEPENDENCY_POLICY.md)
 - Testing: [docs/testing.md](docs/testing.md)
 - Windows build: [docs/windows-build.md](docs/windows-build.md)
 - Build ID policy: [docs/release/BUILD_ID_POLICY.md](docs/release/BUILD_ID_POLICY.md)
@@ -119,7 +120,14 @@ Wheel/sdist:
 Windows PyInstaller package:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64
+```
+
+Dependency/toolchain preflight only:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\release\check_dependencies.py --arch x64 --channel dev
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64 -ValidateOnly
 ```
 
 One-click local Windows installer build:
@@ -141,8 +149,9 @@ Explicit rebuild/test examples:
 ```
 
 This writes the x64 installer, portable zip, release notes, manifest, license
-inventory, and SHA256 checksums under `dist\installers\`, `dist\portable\`,
-`dist\licenses\`, and `dist\checksums\`.
+inventory, dependency status report, and SHA256 checksums under
+`dist\installers\`, `dist\portable\`, `dist\licenses\`, and
+`dist\checksums\`.
 
 The preferred Windows distributor is the installed-tree payload generated from
 the PyInstaller one-folder build, then installed by
@@ -216,6 +225,7 @@ Before publishing a Windows release, run:
 .\.venv\Scripts\python.exe -m twine check dist\*.whl dist\*.tar.gz
 powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
 .\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
+.\.venv\Scripts\python.exe scripts\release\validate_portable.py --archive dist\portable\<portable>.zip
 .\.venv\Scripts\python.exe scripts\release\github_release.py --manifest dist\release-manifest.json
 .\dist\FireDM\firedm.exe --help
 .\dist\FireDM\firedm.exe --imports-only

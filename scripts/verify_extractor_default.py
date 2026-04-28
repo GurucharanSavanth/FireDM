@@ -9,17 +9,27 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ARTIFACTS = REPO_ROOT / "artifacts" / "extractor"
-ARTIFACTS.mkdir(parents=True, exist_ok=True)
+
+
+def default_output_dir() -> Path:
+    return Path(os.environ.get("FIREDM_EXTRACTOR_ARTIFACTS_DIR", REPO_ROOT / "artifacts" / "extractor"))
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Verify FireDM extractor default selection.")
+    parser.add_argument("--output-dir", default=str(default_output_dir()))
+    args = parser.parse_args()
+    output_dir = Path(args.output_dir).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     sys.path.insert(0, str(REPO_ROOT))
     from firedm import config, video
     from firedm.extractor_adapter import (
@@ -55,7 +65,7 @@ def main() -> int:
     snapshot["passed"] = bool(passed)
     snapshot["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%S")
 
-    out = ARTIFACTS / "default_selection_proof.json"
+    out = output_dir / "default_selection_proof.json"
     out.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
     print(json.dumps(snapshot, indent=2))
     return 0 if passed else 1

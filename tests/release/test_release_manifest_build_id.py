@@ -43,12 +43,22 @@ def test_checksum_generation_is_scoped_to_build_id(monkeypatch, tmp_path):
     licenses = dist / "licenses"
     checksums = dist / "checksums"
 
-    write(installers / installer_name(build_id, "dev", "x64"), "installer")
-    write(installers / installer_manifest_file_name(build_id, "dev", "x64"), "{}")
-    write(portable / portable_name(build_id, "dev", "x64"), "zip")
-    write(licenses / license_inventory_name(build_id), "{}")
-    write(dist / release_manifest_name(build_id), json.dumps({"build_id": build_id}))
-    write(dist / release_notes_name(build_id), "notes")
+    installer = write(installers / installer_name(build_id, "dev", "x64"), "installer")
+    installer_manifest = write(installers / installer_manifest_file_name(build_id, "dev", "x64"), "{}")
+    payload = write(installers / f"FireDM_{build_id}_dev_win_x64_payload.zip", "payload")
+    portable = write(portable / portable_name(build_id, "dev", "x64"), "zip")
+    license_inventory = write(licenses / license_inventory_name(build_id), "{}")
+    notes = write(dist / release_notes_name(build_id), "notes")
+    manifest_artifacts = [installer, installer_manifest, payload, portable, license_inventory, notes]
+    write(
+        dist / release_manifest_name(build_id),
+        json.dumps(
+            {
+                "build_id": build_id,
+                "artifacts": [{"path": path.relative_to(dist).as_posix()} for path in manifest_artifacts],
+            }
+        ),
+    )
     write(installers / "FireDM_Setup_20260427_V2_dev_win_x64.exe", "other")
 
     monkeypatch.setattr(generate_checksums, "DIST_DIR", dist)
@@ -65,5 +75,6 @@ def test_checksum_generation_is_scoped_to_build_id(monkeypatch, tmp_path):
     text = checksum_file.read_text(encoding="utf-8")
     assert f"# build_id: {build_id}" in text
     assert "20260427_V1" in text
+    assert f"FireDM_{build_id}_dev_win_x64_payload.zip" in text
     assert "20260427_V2" not in text
     assert (checksums / "SHA256SUMS.txt").read_text(encoding="utf-8") == text
