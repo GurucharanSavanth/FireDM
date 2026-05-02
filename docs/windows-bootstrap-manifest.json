@@ -1,0 +1,99 @@
+{
+  "generated_on": "2026-04-23",
+  "bootstrap_repo_path": "G:\\Personal Builds\\Revive-FireDM\\FireDM-win-bootstrap",
+  "raw_logs_path": "G:\\Personal Builds\\Revive-FireDM\\FireDM-win-bootstrap\\bootstrap-logs",
+  "repo": {
+    "branch": "master",
+    "commit": "88240da7f005c9a7a49a4e2d7f6928fd7fddf043"
+  },
+  "host": {
+    "os": "Microsoft Windows 11 Home Single Language",
+    "version": "10.0.26200",
+    "build": "26200",
+    "architecture": "64-bit"
+  },
+  "python": {
+    "target": "3.10.11",
+    "executable": "G:\\Personal Builds\\Revive-FireDM\\FireDM-win-bootstrap\\.venv\\Scripts\\python.exe",
+    "pip": "26.0.1"
+  },
+  "git": {
+    "version": "2.53.0.windows.2",
+    "path": "C:\\Program Files\\Git\\cmd\\git.exe"
+  },
+  "ffmpeg": {
+    "version": "8.1-essentials_build-www.gyan.dev",
+    "path": "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-essentials_build\\bin\\ffmpeg.exe",
+    "detected_by_app": true
+  },
+  "build_tools": {
+    "installed": true,
+    "instance_name": "Visual Studio Build Tools 2022",
+    "installation_path": "C:\\Users\\SavanthGC\\AppData\\Local\\Programs\\VSBuildTools2022",
+    "installation_version": "17.14.37216.2",
+    "msbuild_path": "C:\\Users\\SavanthGC\\AppData\\Local\\Programs\\VSBuildTools2022\\MSBuild\\Current\\Bin\\MSBuild.exe",
+    "msbuild_version": "17.14.40.60911",
+    "vc_tools_component_present": false,
+    "cl_exe": null,
+    "note": "vswhere -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 returned no matching instance."
+  },
+  "env_vars_changed": [
+    {
+      "name": "PYTHONUTF8",
+      "scope": "User",
+      "old_value": null,
+      "new_value": "1",
+      "reason": "Force UTF-8 mode for consistent Windows console and config-file behavior."
+    },
+    {
+      "name": "PATH",
+      "scope": "User",
+      "old_value_captured": false,
+      "new_value_contains": [
+        "C:\\Users\\SavanthGC\\AppData\\Local\\Programs\\Python\\Python310\\Scripts\\",
+        "C:\\Users\\SavanthGC\\AppData\\Local\\Programs\\Python\\Python310\\",
+        "C:\\Users\\SavanthGC\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-essentials_build\\bin"
+      ],
+      "reason": "Installer-managed additions for Python 3.10 and FFmpeg."
+    }
+  ],
+  "dependencies": {
+    "certifi": "2026.4.22",
+    "youtube_dl": "2021.12.17",
+    "yt_dlp": "2026.3.17",
+    "pycurl": "7.45.7",
+    "Pillow": "12.2.0",
+    "pystray": "0.19.5",
+    "awesometkinter": "2021.11.8",
+    "plyer": "2.1.0",
+    "packaging": "26.1"
+  },
+  "pycurl": {
+    "method": "Official PyPI wheel",
+    "wheel": "pycurl-7.45.7-cp310-cp310-win_amd64.whl",
+    "toolchain_required": false,
+    "import_verified": true,
+    "version_string": "PycURL/\"7.45.7\" libcurl/8.15.0-DEV (OpenSSL/3.5.2) Schannel zlib/1.3.1 brotli/1.1.0 libssh2/1.11.1_DEV nghttp2/1.67.0",
+    "ssl_backend": "(OpenSSL/3.5.2) Schannel"
+  },
+  "runtime": {
+    "module_import_sweep_ok": true,
+    "module_help_ok": true,
+    "imports_only_ok": true,
+    "editable_install_ok": true,
+    "console_entrypoint_ok": true,
+    "gui_smoke_ok": true,
+    "settings_folder": "G:\\Personal Builds\\Revive-FireDM\\FireDM-win-bootstrap\\firedm",
+    "global_settings_folder": "C:\\Users\\SavanthGC\\AppData\\Roaming\\.FireDM",
+    "settings_file_created": true
+  },
+  "known_good_baseline": {
+    "status": "Runnable on Windows",
+    "recommended_python": "3.10.11",
+    "run_from_source": "G:\\Personal Builds\\Revive-FireDM\\FireDM-win-bootstrap\\.venv\\Scripts\\python.exe firedm.py",
+    "run_console_entrypoint": "G:\\Personal Builds\\Revive-FireDM\\FireDM-win-bootstrap\\.venv\\Scripts\\firedm.exe"
+  },
+  "remaining_blockers": [
+    "MSVC compiler payload is not verifiable in the installed Build Tools instance. This is not currently blocking because pycurl installed from an official cp310 wheel."
+  ]
+}

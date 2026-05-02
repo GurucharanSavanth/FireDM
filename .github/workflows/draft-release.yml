@@ -1,0 +1,369 @@
+name: draft-release
+
+on:
+  push:
+    tags:
+      - "build-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_V*"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Build channel. Stable requires signing."
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - beta
+          - stable
+      arch:
+        description: "Windows architecture lane. Only x64 is implemented."
+        required: true
+        default: "x64"
+        type: choice
+        options:
+          - x64
+      build_id:
+        description: "Optional explicit build ID (alias build_code), e.g. 20260427_V1."
+        required: false
+        type: string
+      date:
+        description: "Optional build date override, e.g. 20260427."
+        required: false
+        type: string
+      include_windows:
+        description: "Build the Windows lane on windows-latest."
+        required: true
+        default: true
+        type: boolean
+      include_linux:
+        description: "Build the Linux lane on ubuntu-latest."
+        required: true
+        default: true
+        type: boolean
+      publish_release:
+        description: "Create/upload the GitHub draft release. False runs dry-run only."
+        required: true
+        default: false
+        type: boolean
+      draft:
+        description: "Create release as draft."
+        required: true
+        default: true
+        type: boolean
+      prerelease:
+        description: "Mark release as prerelease. Keep true for dev/beta."
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-build-code:
+    runs-on: ubuntu-latest
+    outputs:
+      build_code: ${{ steps.resolve.outputs.build_code }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      release_name: ${{ steps.resolve.outputs.release_name }}
+      channel: ${{ steps.resolve.outputs.channel }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Resolve unified build code
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel="${{ inputs.channel }}"
+          if [[ -z "$channel" ]]; then channel="dev"; fi
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            channel="stable"
+            build_code="${GITHUB_REF_NAME#build-}"
+            python scripts/release/versioning.py select-build-code --build-code "$build_code" --allow-overwrite --json > /tmp/build_code.json
+          else
+            args=("--include-remote-tags")
+            if [[ -n "${{ inputs.build_id }}" ]]; then args+=("--build-code" "${{ inputs.build_id }}"); fi
+            if [[ -n "${{ inputs.date }}" ]]; then args+=("--date" "${{ inputs.date }}"); fi
+            python scripts/release/versioning.py select-build-code "${args[@]}" --json > /tmp/build_code.json
+          fi
+          build_code="$(python -c "import json; print(json.load(open('/tmp/build_code.json'))['build_code'])")"
+          tag="$(python -c "import json; print(json.load(open('/tmp/build_code.json'))['tag'])")"
+          release_name="$(python -c "import json; print(json.load(open('/tmp/build_code.json'))['release_name'])")"
+          echo "build_code=$build_code" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "Resolved build code: $build_code"
+
+  build-windows:
+    needs: resolve-build-code
+    if: ${{ inputs.include_windows == true || github.event_name == 'push' }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e ".[dev,build]"
+
+      - name: Dependency preflight
+        run: python scripts/release/check_dependencies.py --arch x64 --channel ${{ needs.resolve-build-code.outputs.channel }} --skip-portable
+
+      - name: Compile source and scripts
+        run: python -m compileall firedm scripts
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Lint maintained seam
+        run: >
+          python -m ruff check
+          firedm/FireDM.py
+          firedm/app_paths.py
+          firedm/extractor_adapter.py
+          firedm/ffmpeg_service.py
+          firedm/tool_discovery.py
+          firedm/setting.py
+          firedm/update.py
+          tests
+
+      - name: Configure optional signing
+        shell: pwsh
+        run: |
+          if ("${{ secrets.FIREDM_SIGN_CERT_SHA1 }}" -ne "") {
+            "FIREDM_SIGNTOOL=signtool.exe" >> $env:GITHUB_ENV
+            "FIREDM_SIGN_CERT_SHA1=${{ secrets.FIREDM_SIGN_CERT_SHA1 }}" >> $env:GITHUB_ENV
+          }
+          if ("${{ vars.FIREDM_SIGN_TIMESTAMP_URL }}" -ne "") {
+            "FIREDM_SIGN_TIMESTAMP_URL=${{ vars.FIREDM_SIGN_TIMESTAMP_URL }}" >> $env:GITHUB_ENV
+          }
+
+      - name: Build Windows installer lane
+        shell: pwsh
+        env:
+          BUILD_CODE: ${{ needs.resolve-build-code.outputs.build_code }}
+          CHANNEL: ${{ needs.resolve-build-code.outputs.channel }}
+        run: |
+          $channel = $env:CHANNEL
+          $arch = "${{ inputs.arch }}"
+          if ([string]::IsNullOrWhiteSpace($arch)) { $arch = "x64" }
+          if ($channel -eq "stable") {
+            $env:FIREDM_REQUIRE_SIGNING = "1"
+            "FIREDM_REQUIRE_SIGNING=1" >> $env:GITHUB_ENV
+          }
+
+          $args = @(
+            "scripts\release\build_windows.py",
+            "--arch", $arch,
+            "--channel", $channel,
+            "--build-id", $env:BUILD_CODE
+          )
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $args += "--allow-overwrite"
+          }
+          python @args
+
+          $manifest = Get-Content "dist\release-manifest.json" | ConvertFrom-Json
+          if (-not $manifest.build_id) { throw "release manifest missing build_id" }
+          if ($manifest.build_id -ne $env:BUILD_CODE) { throw "release manifest build_id $($manifest.build_id) != expected $env:BUILD_CODE" }
+          foreach ($artifact in $manifest.artifacts) {
+            if ($artifact.path -notmatch [regex]::Escape($manifest.build_id)) {
+              throw "artifact path missing build_id: $($artifact.path)"
+            }
+          }
+          "version=$($manifest.version)" >> $env:GITHUB_ENV
+          "channel=$($manifest.channel)" >> $env:GITHUB_ENV
+          "build_id=$($manifest.build_id)" >> $env:GITHUB_ENV
+          "tag=$($manifest.tag_name)" >> $env:GITHUB_ENV
+          "release_name=$($manifest.release_name)" >> $env:GITHUB_ENV
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: FireDM-Windows-${{ env.build_id }}
+          path: |
+            dist/installers/**/*${{ env.build_id }}*.exe
+            dist/installers/*${{ env.build_id }}*.manifest.json
+            dist/installers/**/*${{ env.build_id }}*.manifest.json
+            dist/installers/**/*${{ env.build_id }}*payload.zip
+            dist/portable/*${{ env.build_id }}*.zip
+            dist/checksums/SHA256SUMS_${{ env.build_id }}.txt
+            dist/FireDM_release_manifest_${{ env.build_id }}.json
+            dist/FireDM_release_manifest_${{ env.build_id }}_windows.json
+            dist/FireDM_release_notes_${{ env.build_id }}.md
+            dist/dependency-status_${{ env.build_id }}.json
+            dist/licenses/license-inventory_${{ env.build_id }}.json
+          if-no-files-found: error
+
+  build-linux:
+    needs: resolve-build-code
+    if: ${{ inputs.include_linux == true || github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-tk tk-dev libssl-dev libffi-dev libcurl4-openssl-dev \
+            libssl3 libgirepository1.0-dev gir1.2-ayatanaappindicator3-0.1
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e ".[dev,build]"
+
+      - name: Dependency preflight
+        run: python scripts/release/check_dependencies.py --arch x64 --channel ${{ needs.resolve-build-code.outputs.channel }} --skip-portable
+
+      - name: Compile source and scripts
+        run: python -m compileall firedm scripts
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build Linux portable lane
+        env:
+          BUILD_CODE: ${{ needs.resolve-build-code.outputs.build_code }}
+          CHANNEL: ${{ needs.resolve-build-code.outputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra=()
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            extra+=("--allow-overwrite")
+          fi
+          python scripts/release/build_linux.py --arch x64 --channel "$CHANNEL" --build-id "$BUILD_CODE" "${extra[@]}"
+
+          manifest="dist/FireDM_release_manifest_${BUILD_CODE}_linux.json"
+          if [[ ! -f "$manifest" ]]; then
+            echo "Linux per-platform manifest missing: $manifest" >&2
+            exit 1
+          fi
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: FireDM-Linux-${{ needs.resolve-build-code.outputs.build_code }}
+          path: |
+            dist/portable-linux/FireDM_${{ needs.resolve-build-code.outputs.build_code }}_*_linux_x64*.tar.gz
+            dist/payloads-linux/linux-x64/payload-manifest.json
+            dist/FireDM_release_manifest_${{ needs.resolve-build-code.outputs.build_code }}_linux.json
+            dist/FireDM_release_notes_${{ needs.resolve-build-code.outputs.build_code }}.md
+            dist/dependency-status_${{ needs.resolve-build-code.outputs.build_code }}.json
+            dist/licenses/license-inventory_${{ needs.resolve-build-code.outputs.build_code }}.json
+          if-no-files-found: error
+
+  release:
+    needs: [resolve-build-code, build-windows, build-linux]
+    if: |
+      always() &&
+      needs.resolve-build-code.result == 'success' &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
+      (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') &&
+      (needs.build-windows.result != 'skipped' || needs.build-linux.result != 'skipped')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Install release dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Download Windows artifacts
+        if: ${{ needs.build-windows.result == 'success' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: FireDM-Windows-${{ needs.resolve-build-code.outputs.build_code }}
+          path: dist
+
+      - name: Download Linux artifacts
+        if: ${{ needs.build-linux.result == 'success' }}
+        uses: actions/download-artifact@v6
+        with:
+          name: FireDM-Linux-${{ needs.resolve-build-code.outputs.build_code }}
+          path: dist
+
+      - name: Merge cross-platform release manifest
+        env:
+          BUILD_CODE: ${{ needs.resolve-build-code.outputs.build_code }}
+        run: |
+          set -euo pipefail
+          merge_args=("--build-id" "$BUILD_CODE" "--workflow" "$GITHUB_WORKFLOW")
+          win_manifest="dist/FireDM_release_manifest_${BUILD_CODE}_windows.json"
+          linux_manifest="dist/FireDM_release_manifest_${BUILD_CODE}_linux.json"
+          if [[ -f "$win_manifest" ]]; then merge_args+=("--windows-manifest" "$win_manifest"); fi
+          if [[ -f "$linux_manifest" ]]; then merge_args+=("--linux-manifest" "$linux_manifest"); fi
+          python scripts/release/merge_release_manifest.py "${merge_args[@]}"
+
+      - name: Regenerate cross-platform checksums
+        env:
+          BUILD_CODE: ${{ needs.resolve-build-code.outputs.build_code }}
+        run: python scripts/release/generate_checksums.py --build-id "$BUILD_CODE"
+
+      - name: Dry-run or publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_CODE: ${{ needs.resolve-build-code.outputs.build_code }}
+          CHANNEL: ${{ needs.resolve-build-code.outputs.channel }}
+        run: |
+          set -euo pipefail
+          release_args=(
+            "scripts/release/github_release.py"
+            "--manifest" "dist/FireDM_release_manifest_${BUILD_CODE}.json"
+            "--repo" "$GITHUB_REPOSITORY"
+          )
+          if [[ "${{ inputs.draft }}" == "false" ]]; then
+            release_args+=("--no-draft")
+          fi
+          if [[ "${{ inputs.prerelease }}" == "false" || "$CHANNEL" == "stable" ]]; then
+            release_args+=("--no-prerelease")
+          else
+            release_args+=("--prerelease")
+          fi
+          if [[ "$GITHUB_REF_TYPE" == "tag" || "${{ inputs.publish_release }}" == "true" ]]; then
+            release_args+=("--publish")
+          fi
+          python "${release_args[@]}"

@@ -1,0 +1,179 @@
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "FireDM"
+description = "Multi-connection download manager with Tkinter GUI, CLI mode, pycurl transport, and ffmpeg post-processing."
+readme = "README.md"
+# Python 3.10 is the only verified runtime for the revived Windows baseline.
+# Re-open this range only after 3.11/3.12 pass tests, import smoke, and
+# Windows packaging validation.
+requires-python = ">=3.10,<3.11"
+dynamic = ["version"]
+# PEP 639: license is a string SPDX expression (setuptools 77+ supports this).
+license = "LGPL-3.0-or-later"
+authors = [
+  { name = "Mahmoud Elshahat", email = "info.pyidm@gmail.com" },
+]
+keywords = ["download-manager", "pycurl", "yt-dlp", "tkinter", "ffmpeg"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Environment :: Win32 (MS Windows)",
+  "Environment :: X11 Applications :: GTK",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Internet",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Utilities",
+]
+# Runtime deps: the maintained extractor is the only one in the default
+# install set. The deprecated `youtube_dl` package moved to the `legacy`
+# optional group — see docs/extractor-migration-policy.md.
+dependencies = [
+  "plyer>=2.1.0",
+  "certifi>=2024.0.0",
+  "yt-dlp[default]>=2026.3.17",
+  "pycurl>=7.45.2",
+  "Pillow>=10.0.0",
+  "pystray>=0.19.5",
+  "awesometkinter>=2021.11.8",
+  "packaging>=24.0",
+  "distro>=1.9.0; platform_system == 'Linux'",
+]
+
+[project.optional-dependencies]
+# Legacy compatibility only. Install with `pip install -e .[legacy]` if a
+# user still relies on `youtube_dl.InfoExtractor` plugins under
+# `<settings>/extractors/`. Not part of the default install.
+legacy = [
+  "youtube_dl>=2021.12.17",
+]
+test = [
+  "pytest>=9.0",
+  "pytest-cov>=6.0",
+]
+type = [
+  "mypy>=1.11",
+]
+dev = [
+  "build>=1.2",
+  "ruff>=0.9",
+  "pytest>=9.0",
+  "pytest-cov>=6.0",
+  "mypy>=1.11",
+  "twine>=5.1",
+]
+build = [
+  "build>=1.2",
+  "pyinstaller>=6.10",
+]
+
+[project.scripts]
+firedm = "firedm.FireDM:main"
+firedm-native-host = "firedm.native_host:main"
+
+[project.urls]
+Homepage = "https://github.com/GurucharanSavanth/FireDM"
+Source = "https://github.com/GurucharanSavanth/FireDM"
+Issues = "https://github.com/GurucharanSavanth/FireDM/issues"
+Releases = "https://github.com/GurucharanSavanth/FireDM/releases"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["firedm", "firedm.*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "firedm.version.__version__" }
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["firedm"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+# narrow scope — full-repo ruff is deferred until tkview/utils legacy
+# modules are refactored. See docs/tooling-policy.md.
+extend-exclude = [
+  "scripts/exe_build",
+  "scripts/appimage",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",     # pycodestyle errors
+  "F",     # pyflakes
+  "I",     # isort
+  "UP",    # pyupgrade
+  "B",     # flake8-bugbear (likely bugs)
+  "SIM",   # flake8-simplify
+]
+ignore = [
+  "E501",  # line length handled by formatter
+]
+
+[tool.ruff.format]
+# Ruff's Black-compatible formatter is the canonical formatter for this
+# repo on modernized modules.
+quote-style = "double"
+line-ending = "lf"
+
+# Scoped type-check. mypy runs against the modernized seams only; legacy
+# modules are intentionally untyped and suppressed via per-module overrides.
+# See docs/tooling-policy.md.
+[tool.mypy]
+python_version = "3.10"
+files = [
+  "firedm/app_paths.py",
+  "firedm/download_engines/base.py",
+  "firedm/download_engines/models.py",
+  "firedm/download_engines/registry.py",
+  "firedm/extractor_adapter.py",
+  "firedm/ffmpeg_commands.py",
+  "firedm/ffmpeg_service.py",
+  "firedm/tool_discovery.py",
+  "firedm/pipeline_logger.py",
+  "firedm/playlist_builder.py",
+  "firedm/playlist_entry.py",
+]
+follow_imports = "silent"
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "firedm.utils",
+  "firedm.config",
+  "firedm.brain",
+  "firedm.worker",
+  "firedm.tkview",
+  "firedm.controller",
+  "firedm.video",
+  "firedm.downloaditem",
+  "firedm.model",
+  "firedm.update",
+  "firedm.setting",
+  "firedm.dependency",
+  "firedm.FireDM",
+]
+ignore_errors = true

@@ -1,0 +1,59 @@
+# Normalize text by default. Git decides binary for unknown file types.
+* text=auto
+
+# Source, docs, and config use LF.
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.json text eol=lf
+*.spec text eol=lf
+*.sh text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+
+# Windows command scripts use CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell runs with LF in this repo.
+*.ps1 text eol=lf
+
+# Installer authoring files, if added later.
+*.iss text eol=crlf
+*.wxs text eol=crlf
+*.wixproj text eol=crlf
+*.vcproj text eol=crlf
+
+# Text logs kept as evidence should be stable.
+*.txt text eol=crlf
+*.log text eol=lf
+artifacts/smoke/*.log text eol=crlf
+
+# Binary assets and generated packages.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary
+*.gif binary
+*.exe binary
+*.dll binary
+*.pyd binary
+*.so binary
+*.dylib binary
+*.zip binary
+*.msi binary
+*.msix binary
+*.msixbundle binary
+*.7z binary
+*.tar binary
+*.gz binary
+*.pyz binary
+*.pkg binary
