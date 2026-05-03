@@ -45,6 +45,16 @@ artifacts/full_codebase_repair/pyinstaller-dist/
 !docs/release/*.md
 !docs/agent/
 !docs/agent/*.md
+!docs/architecture/
+!docs/architecture/*.md
+!docs/security/
+!docs/security/*.md
+!docs/user/
+!docs/user/*.md
+!docs/frontend/
+!docs/frontend/*.md
+!docs/developer/
+!docs/developer/*.md
 !.claude/
 !.claude/agents/
 !.claude/agents/*.md
@@ -53,6 +63,10 @@ artifacts/full_codebase_repair/pyinstaller-dist/
 firedm/_build_info.py
 !firedm/plugins/
 !firedm/plugins/*.py
+!firedm/download_engines/
+!firedm/download_engines/*.py
+!firedm/frontend_common/
+!firedm/frontend_common/*.py
 !ChangeLog.txt
 !contributors.md
 !BASELINE_AUDIT.md

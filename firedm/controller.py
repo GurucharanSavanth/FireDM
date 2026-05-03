@@ -41,6 +41,7 @@ from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
 from .playlist_builder import build_playlist_from_info
 from .playlist_entry import normalize_entry
 from .brain import brain
+from .download_engines.runtime_bridge import evaluate_engine_for_download_item
 from . import video
 from .video import get_media_info, process_video
 from .model import ObservableDownloadItem, ObservableVideo
@@ -1172,6 +1173,8 @@ class Controller:
 
         # retry multiple times to download and auto refresh expired url
         for n in range(config.refresh_url_retries + 1):
+            self._preflight_download_engine(d)
+
             # start brain in a separate thread
             t = Thread(target=brain, daemon=False, args=(d,))
             t.start()
@@ -1204,6 +1207,56 @@ class Controller:
         # report completion
         if d.status == Status.completed:
             log(f"File: {d.name}, saved at: {d.folder}")
+
+    def _preflight_download_engine(self, d):
+        """Run the Layer-3 engine seam in advisory mode before legacy runtime."""
+        try:
+            outcome = evaluate_engine_for_download_item(
+                d,
+                enabled=getattr(config, "engine_bridge_diagnostics_enabled", True),
+            )
+        except Exception as e:
+            log("download engine advisory preflight skipped:", type(e).__name__, log_level=2)
+            return None
+
+        self._log_download_engine_preflight(outcome)
+        return outcome
+
+    def _log_download_engine_preflight(self, outcome):
+        if outcome is None:
+            return
+
+        if outcome.dropped_headers:
+            log(
+                "download engine advisory preflight dropped invalid headers:",
+                len(outcome.dropped_headers),
+                log_level=2,
+            )
+
+        if not outcome.applied:
+            if outcome.skip_reason not in (None, "disabled"):
+                log("download engine advisory preflight skipped:", outcome.skip_reason, log_level=2)
+            return
+
+        preflight = outcome.preflight
+        if preflight and preflight.allowed:
+            log(
+                "download engine advisory preflight ok:",
+                outcome.engine_id,
+                "- legacy runtime remains active",
+                log_level=2,
+            )
+            return
+
+        failure_code = "unknown"
+        if preflight and preflight.failure:
+            failure_code = preflight.failure.code
+        log(
+            "download engine advisory preflight fallback:",
+            outcome.engine_id,
+            failure_code,
+            log_level=2,
+        )
 
     def stop_download(self, uid):
         """stop downloading

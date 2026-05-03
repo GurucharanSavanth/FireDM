@@ -13,7 +13,9 @@
 - observed: `firedm/brain.py`, `firedm/worker.py`, and `firedm/downloaditem.py` implement segmented download state, worker execution, and merge/progress behavior.
 - observed: `firedm/video.py` owns extractor calls, stream selection, HLS/subtitles, ffmpeg execution, metadata writing, and `Video`/`Stream` models.
 - observed: Modernized seams include `app_paths.py`, `ffmpeg_service.py`, `tool_discovery.py`, `extractor_adapter.py`, `playlist_builder.py`, `playlist_entry.py`, `ffmpeg_commands.py`, and `pipeline_logger.py`.
-- changed: `firedm/download_engines/` now contains inert typed download-engine models, protocol, health descriptors, and registry.
+- changed: `firedm/download_engines/` now contains typed models, the `DownloadEngine` protocol, health descriptors, registry, `EngineConfig`, default registry factory, `select_engine` resolver, an `InternalHTTPDownloadEngine` adapter skeleton, and a diagnostic runtime bridge.
+- changed: `Controller._download()` calls the diagnostic runtime bridge before each legacy `brain(d)` attempt. The bridge builds a `DownloadRequest`, selects/preflights an engine for plain HTTP/HTTPS file-shaped downloads, and falls back to legacy runtime unconditionally.
+- observed: `InternalHTTPDownloadEngine.start()` is intentionally not wired to runtime; it returns a structured `ENGINE_NOT_CONNECTED` failure. The legacy `Controller -> brain -> worker` flow remains the only code path moving bytes.
 
 ## Current Tooling Summary
 - observed: Python version range in `pyproject.toml` is `>=3.10,<3.11`.
@@ -43,12 +45,17 @@
 - inferred: Move subprocess creation toward argv-list builders and narrow runners.
 - inferred: Keep transport parity tests before any pycurl replacement is considered.
 - changed: The first engine-modernization patch adds only a registry/model seam; it does not replace legacy controller, brain, worker, or GUI behavior.
+- changed: The second engine-modernization patch added `EngineConfig`, the default registry factory, `select_engine` preference resolution, and an inert `InternalHTTPDownloadEngine` adapter skeleton. Runtime download path is still legacy.
+- changed: Layer 3 added an advisory controller bridge only. It preserves legacy `brain(d)` execution, never calls engine `start()`, skips HLS/DASH/fragmented/video/audio/key and FTP/SFTP shapes, and records only non-secret request parity metadata.
+- changed: The first frontend migration slice adds `firedm/frontend_common/` with toolkit-neutral view models for engine selection, queue rows, failures, health rows, and update status. It adds no PySide6 dependency, no Tkinter deletion, and no controller/view runtime switch.
 
 ## Modernization Program Baseline
 - changed: Added architecture, release, user, security, and developer docs for the phased modernization plan.
 - changed: Recorded official-doc-backed toolchain decisions in `docs/architecture/TOOLCHAIN_DECISIONS.md`.
 - changed: Recorded OS support claims in `docs/release/COMPATIBILITY_MATRIX.md`; XP/Vista/7 are not modern-lane targets.
+- changed: Recorded frontend, dependency, runtime, and compiler migration plans in `docs/frontend/`, `docs/developer/DEPENDENCY_MODERNIZATION_PLAN.md`, and `docs/release/`.
 - changed: Added `tests/test_download_engines.py` for model and registry invariants.
+- changed: Layer 0 docs + Layer 1/2 + Layer 3 advisory preflight seam are in the working tree (uncommitted); next: broader runtime parity gates before any actual engine execution handoff.
 
 ## Completed Documentation Rebuild Decisions
 - changed: Added `AGENT.md`, `AGENTS.md`, `CLAUDE.md`, and `docs/agent/` guidance set.

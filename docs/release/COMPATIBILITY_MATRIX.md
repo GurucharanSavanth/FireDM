@@ -1,8 +1,8 @@
 # Compatibility Matrix
 
-Status: changed 2026-05-02.
+Status: changed 2026-05-03.
 
-Official basis: Python 3.10 docs say Windows 8.1+ for Python 3.10; current Python docs say Python 3.14 is Windows 10+ and recommend Python 3.8 for Windows 7 and Python 3.12 for Windows 8.1.
+Official basis: Python 3.10 docs say Windows 8.1+ for Python 3.10; current Python docs say Python 3.14 is Windows 10+ and recommend Python 3.8 for Windows 7 and Python 3.12 for Windows 8.1. Python 3.14.4 is the latest stable CPython release observed in official docs during the 2026-05-03 run, but it is not the local validated runtime.
 
 | OS | Python candidate | GUI | TLS/network | pycurl/requests/urllib | aria2c | yt-dlp | FFmpeg | PyInstaller | Nuitka | Updater | Feature tier | Validation | Blockers |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

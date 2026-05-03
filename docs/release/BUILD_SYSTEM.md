@@ -1,10 +1,12 @@
 # Build System
 
-Status: changed 2026-05-02.
+Status: changed 2026-05-03.
 
 ## Current Local Build Surface
 - observed: `build-release.bat`, `scripts/windows-build.ps1`, `scripts/firedm-win.spec`, `scripts/firedm-linux.spec`, and `scripts/release/` exist.
 - observed: `pyproject.toml` defines build extra `pyinstaller>=6.10`.
+- observed: repo `.venv` contains PyInstaller 6.20.0; `nuitka` is not detected on PATH.
+- observed: current `dist/` and `build/` artifacts include stale paths from a different checkout and are not proof this checkout builds.
 - blocked: This phase did not create or run `scripts/release/release_build.ps1`.
 
 ## Planned Orchestrator
