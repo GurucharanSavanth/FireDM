@@ -2,6 +2,8 @@ name: draft-release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "build-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_V*"
   workflow_dispatch:
@@ -363,7 +365,7 @@ jobs:
           else
             release_args+=("--prerelease")
           fi
-          if [[ "$GITHUB_REF_TYPE" == "tag" || "${{ inputs.publish_release }}" == "true" ]]; then
+          if [[ "$GITHUB_REF_TYPE" == "tag" || "${{ inputs.publish_release }}" == "true" || "${{ github.event_name }}" == "push" ]]; then
             release_args+=("--publish")
           fi
           python "${release_args[@]}"
