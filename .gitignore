@@ -45,6 +45,8 @@ artifacts/full_codebase_repair/pyinstaller-dist/
 !docs/release/*.md
 !docs/agent/
 !docs/agent/*.md
+!docs/agent/**/
+!docs/agent/**/*.md
 !docs/architecture/
 !docs/architecture/*.md
 !docs/security/
@@ -58,6 +60,8 @@ artifacts/full_codebase_repair/pyinstaller-dist/
 !.claude/
 !.claude/agents/
 !.claude/agents/*.md
+!.claude/agents/**/
+!.claude/agents/**/*.md
 !firedm/
 !firedm/*.py
 firedm/_build_info.py
