@@ -4,6 +4,7 @@
 # User Toggle: GUI > Settings > Plugin Manager
 """Browser integration plugin - registers stdio native messaging host manifest."""
 
+import contextlib
 import json
 import os
 import sys
@@ -44,7 +45,7 @@ class BrowserIntegrationPlugin(PluginBase):
             origins_path = os.path.join(config.sett_folder, "allowed_origins.json")
             if os.path.isfile(origins_path):
                 try:
-                    with open(origins_path, "r", encoding="utf-8") as f:
+                    with open(origins_path, encoding="utf-8") as f:
                         manifest["allowed_origins"] = json.load(f)
                 except Exception as e:
                     log("Browser integration: allowed_origins.json read error:", e)
@@ -124,10 +125,8 @@ class BrowserIntegrationPlugin(PluginBase):
             launcher = settings_folder / "firedm-native-host"
             quoted = " ".join("'" + part.replace("'", "'\"'\"'") + "'" for part in command)
             launcher.write_text("#!/bin/sh\nexec " + quoted + ' "$@"\n', encoding="utf-8")
-            try:
+            with contextlib.suppress(OSError):
                 launcher.chmod(0o700)
-            except OSError:
-                pass
         return launcher
 
     def _start_controller_endpoint_if_ready(self):

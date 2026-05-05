@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import base64
 import copy
-import importlib
 import io
 import logging
 import os
@@ -18,18 +17,17 @@ import re
 import shlex
 import subprocess
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urljoin
 
 from . import config
 from .downloaditem import DownloadItem, Segment
 from .extractor_adapter import (
-    FALLBACK_EXTRACTOR,
     PRIMARY_EXTRACTOR,
-    SERVICE as EXTRACTOR_SERVICE,
-    choose_extractor_name,
     load_extractor_module,
+)
+from .extractor_adapter import (
+    SERVICE as EXTRACTOR_SERVICE,
 )
 from .ffmpeg_commands import (
     build_audio_convert_command,
@@ -41,25 +39,25 @@ from .ffmpeg_service import resolve_ffmpeg_path
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception, redact_url_for_log
 from .tool_discovery import resolve_binary_path
 from .utils import (
-    log,
-    validate_file_name,
-    get_headers,
-    format_bytes,
-    run_command,
     delete_file,
     download,
+    format_bytes,
+    get_headers,
+    import_file,
+    log,
     rename_file,
+    run_command,
     run_thread,
-    import_file
+    validate_file_name,
 )
 
 logger = logging.getLogger(__name__)
 
 
 # YouTube-DL extractors (lazy-loaded)
-ytdl: Optional[Any] = None  # Imported in separate thread
-youtube_dl: Optional[Any] = None  # Imported in separate thread
-yt_dlp: Optional[Any] = None  # Imported in separate thread
+ytdl: Any | None = None  # Imported in separate thread
+youtube_dl: Any | None = None  # Imported in separate thread
+yt_dlp: Any | None = None  # Imported in separate thread
 
 
 class Logger:
@@ -84,7 +82,7 @@ class Logger:
         return "youtube-dl Logger"
 
 
-def resolve_deno_runtime_path() -> Optional[str]:
+def resolve_deno_runtime_path() -> str | None:
     """Resolve path to deno runtime executable.
 
     Returns:
@@ -96,13 +94,13 @@ def resolve_deno_runtime_path() -> Optional[str]:
     )
 
 
-def get_ytdl_options() -> Dict[str, Any]:
+def get_ytdl_options() -> dict[str, Any]:
     """Build youtube-dl/yt-dlp options dictionary.
 
     Returns:
         Dictionary of youtube-dl options.
     """
-    ydl_opts: Dict[str, Any] = {
+    ydl_opts: dict[str, Any] = {
         'ignoreerrors': True,
         'logger': Logger()
     }
@@ -161,7 +159,7 @@ def get_ytdl_options() -> Dict[str, Any]:
 class Video(DownloadItem):
     """YouTube video object and youtube-dl interface."""
 
-    def __init__(self, url: str, vid_info: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, url: str, vid_info: dict[str, Any] | None = None) -> None:
         """Initialize a Video object.
 
         Args:
@@ -171,7 +169,7 @@ class Video(DownloadItem):
         super().__init__(folder=config.download_folder)
         self.type: str = 'video'
         self.resumable: bool = True
-        self.vid_info: Dict[str, Any] = vid_info or {}
+        self.vid_info: dict[str, Any] = vid_info or {}
 
         # Fetch video info if not provided
         if not self.vid_info:
@@ -190,19 +188,19 @@ class Video(DownloadItem):
         self.name: str = self.title
 
         # Streams
-        self.all_streams: List[Any] = []
-        self.stream_menu: List[str] = []  # Stream names
-        self.stream_menu_map: List[Any] = []  # Stream objects in same order
-        self.names_map: Dict[str, List[Any]] = {
+        self.all_streams: list[Any] = []
+        self.stream_menu: list[str] = []  # Stream names
+        self.stream_menu_map: list[Any] = []  # Stream objects in same order
+        self.names_map: dict[str, list[Any]] = {
             'mp4_videos': [],
             'other_videos': [],
             'audio_streams': [],
             'extra_streams': []
         }
-        self.audio_streams: List[Any] = []
-        self.video_streams: List[Any] = []
+        self.audio_streams: list[Any] = []
+        self.video_streams: list[Any] = []
 
-        self._selected_stream: Optional[Any] = None
+        self._selected_stream: Any | None = None
 
         # Thumbnail
         self.thumbnail_url: str = ''
@@ -477,7 +475,7 @@ class Video(DownloadItem):
                 # select stream ----------------------------------------------------------------------------------------
                 stream = streams[0]
 
-        except:
+        except Exception:
             stream = None
 
         return stream
@@ -508,7 +506,6 @@ class Video(DownloadItem):
                 from PIL import Image
                 log('downloading Thumbnail', log_level=2)
                 buffer = download(self.thumbnail_url, verbose=False, return_buffer=True, decode=False)
-                import awesometkinter
                 img = Image.open(buffer)
                 img = img.resize(size, resample=Image.LANCZOS)
                 buffer = io.BytesIO()
@@ -583,10 +580,7 @@ class Video(DownloadItem):
                 ext = dash_audio_extension_for(video_stream.extension)
                 streams = [stream for stream in streams if stream.extension == ext] or streams
 
-                if quality == 'lowest':
-                    audio_stream = streams[-1]
-                else:
-                    audio_stream = streams[0]
+                audio_stream = streams[-1] if quality == 'lowest' else streams[0]
 
             if audio_stream:
                 self.audio_stream = audio_stream
@@ -739,7 +733,7 @@ class Stream:
 
     @property
     def isfragmented(self):
-        return True if self.fragments else False
+        return bool(self.fragments)
 
     @property
     def name(self):
@@ -765,7 +759,7 @@ class Stream:
                     height = sorted(config.standard_video_qualities, key=lambda item: abs(height - item))[0]
 
                 return height
-        except:
+        except Exception:
             return 0
 
     def __repr__(self, include_size=True):
@@ -895,7 +889,7 @@ def load_user_extractors(engine=youtube_dl):
                 try:
                     if issubclass(value, module.InfoExtractor):
                         extractors[key] = value
-                except:
+                except Exception:
                     pass
 
             # print('extractors:', extractors)
@@ -1061,7 +1055,7 @@ def set_interrupt_switch(ydl):
             # print('urlopen started ............................................')
             if config.ytdl_abort:
                 # print('urlopen aborted ............................................')
-                raise Exception(f'video extractor aborted by user')
+                raise Exception('video extractor aborted by user')
                 # return None
             data = func(self, *args)
             return data
@@ -1158,21 +1152,15 @@ def pre_process_hls(d):
 
     def not_supported(m3u8_doc):
         # return msg if there is un supported protocol found in the m3u8 file
-
-        if m3u8_doc:
-            # SAMPLE-AES is not supported by ffmpeg, and mostly this will be a protected DRM stream, which shouldn't be downloaded
-            if '#EXT-X-KEY:METHOD=SAMPLE-AES' in m3u8_doc:
-                return 'Error: SAMPLE-AES encryption is not supported'
+        # SAMPLE-AES is not supported by ffmpeg, and mostly this will be a protected DRM stream, which shouldn't be downloaded
+        if m3u8_doc and '#EXT-X-KEY:METHOD=SAMPLE-AES' in m3u8_doc:
+            return 'Error: SAMPLE-AES encryption is not supported'
 
         return None
 
     def is_encrypted(m3u8_doc):
-        if m3u8_doc:
-            # check if file encrypted, example: #EXT-X-KEY:METHOD=AES-128,URI="xxx",IV=0x8f6109d91fffb816bcd43fefe018db49
-            if '#EXT-X-KEY' in m3u8_doc:
-                return True
-
-        return False
+        # check if file encrypted, example: #EXT-X-KEY:METHOD=AES-128,URI="xxx",IV=0x8f6109d91fffb816bcd43fefe018db49
+        return bool(m3u8_doc and '#EXT-X-KEY' in m3u8_doc)
 
     # maybe the playlist is a direct media playlist and not a master playlist
     if d.manifest_url:
@@ -1190,7 +1178,7 @@ def pre_process_hls(d):
             f.write(master_m3u8)
 
         # master playlist doesn't have "#EXT-X-TARGETDURATION" tag, only media playlist has it
-        if not "#EXT-X-TARGETDURATION" in master_m3u8:
+        if "#EXT-X-TARGETDURATION" not in master_m3u8:
             refresh_urls(master_m3u8, d.manifest_url)
 
     log('video m3u8:        ', redact_url_for_log(d.eff_url))
@@ -1389,7 +1377,8 @@ def parse_subtitles(m3u8_doc, m3u8_url):
             # subtitles = {language1:[sub1, sub2, ...], language2: [sub1, ...]}, where sub = {'url': 'http://x.com/s2', 'ext': 'vtt'}
             language = info.get('LANGUAGE') or info.get('NAME') or f'sub{i}'
             url = info.get('URI')
-            if not url: continue
+            if not url:
+                continue
 
             # get absolute url
             url = urljoin(m3u8_url, url)
@@ -1446,7 +1435,7 @@ def download_subtitles(subs, d, ext='srt'):
             # print(sub)
             if ext == sub['ext']:
                 selected_sub = sub
-            elif ext == 'srt' and 'vtt' == sub['ext']:
+            elif ext == 'srt' and sub['ext'] == 'vtt':
                 # if vtt is available will send it as if it is srt and it will be handled in download_sub by ffmpeg
                 sub['ext'] = 'srt'
                 selected_sub = sub
@@ -1522,11 +1511,11 @@ def get_metadata(info):
     if chapters:
         for chapter in chapters:
             metadata_file_content += '[CHAPTER]\nTIMEBASE=1/1000\n'
-            metadata_file_content += 'START=%d\n' % (chapter['start_time'] * 1000)
-            metadata_file_content += 'END=%d\n' % (chapter['end_time'] * 1000)
+            metadata_file_content += f'START={int(chapter["start_time"] * 1000)}\n'
+            metadata_file_content += f'END={int(chapter["end_time"] * 1000)}\n'
             chapter_title = chapter.get('title')
             if chapter_title:
-                metadata_file_content += 'title=%s\n' % ffmpeg_escape(chapter_title)
+                metadata_file_content += f'title={ffmpeg_escape(chapter_title)}\n'
 
             # add empty line, not necessary, just for better viewing file while debugging
             metadata_file_content += '\n'
@@ -1628,7 +1617,7 @@ class MediaPlaylist:
                 try:
                     self.seg_duration = float(line.split(':')[1].split(',')[0])
                     self.total_duration += self.seg_duration
-                except:
+                except Exception:
                     pass
 
                 next_line = lines[i + 1]

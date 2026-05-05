@@ -8,18 +8,23 @@
 """
 import os
 import time
-from threading import Thread
 from queue import Queue
-import concurrent.futures
+from threading import Thread
 
-from .video import merge_video_audio, pre_process_hls, post_process_hls, \
-    convert_audio, download_subtitles, write_metadata
 from . import config
 from .config import Status
-from .pipeline_logger import redact_url_for_log
-from .utils import (log, format_bytes, delete_file, rename_file, run_command, read_in_chunks)
-from .worker import Worker
 from .downloaditem import Segment
+from .pipeline_logger import redact_url_for_log
+from .utils import delete_file, format_bytes, log, read_in_chunks, rename_file, run_command
+from .video import (
+    convert_audio,
+    download_subtitles,
+    merge_video_audio,
+    post_process_hls,
+    pre_process_hls,
+    write_metadata,
+)
+from .worker import Worker
 
 
 def brain(d=None):
@@ -133,8 +138,8 @@ def file_manager(d, q, keep_segments=True):
                 # it will raise "TypeError: 'NoneType' object is not subscriptable" if for example video is normal
                 # and audio is fragmented, the latter will have range=None
                 job_list = sorted(job_list, key=lambda seg: seg.range[0])
-        except:
-            pass
+        except Exception as e:
+            log(f'Error sorting segments: {e}', log_level=3)
 
         for seg in job_list:
 
@@ -175,24 +180,25 @@ def file_manager(d, q, keep_segments=True):
                     # almost 90 sec wait on some windows machine to be able to rename the file, after close it
                     # fd.flush() and os.fsync(fd) didn't solve the problem
                     if seg.range:
-                        target_file = open(seg.tempfile, 'rb+')
-                        # must seek exact position, segments are not in order for simple append
-                        target_file.seek(seg.range[0])
+                        with open(seg.tempfile, 'rb+') as target_file:
+                            # must seek exact position, segments are not in order for simple append
+                            target_file.seek(seg.range[0])
 
-                        # read file in chunks to save memory  in case of big segments
-                        # read the exact segment size, sometimes segment has extra data as a side effect of
-                        # auto segmentation
-                        chunks = read_in_chunks(seg.name, bytes_range=(0, seg.range[1] - seg.range[0]), flag='rb')
+                            # read file in chunks to save memory  in case of big segments
+                            # read the exact segment size, sometimes segment has extra data as a side effect of
+                            # auto segmentation
+                            chunks = read_in_chunks(seg.name, bytes_range=(0, seg.range[1] - seg.range[0]), flag='rb')
+
+                            # write data
+                            for chunk in chunks:
+                                target_file.write(chunk)
                     else:
-                        target_file = open(seg.tempfile, 'ab')
-                        chunks = read_in_chunks(seg.name)
+                        with open(seg.tempfile, 'ab') as target_file:
+                            chunks = read_in_chunks(seg.name)
 
-                    # write data
-                    for chunk in chunks:
-                        target_file.write(chunk)
-
-                    # close file
-                    target_file.close()
+                            # write data
+                            for chunk in chunks:
+                                target_file.write(chunk)
 
                 seg.completed = True
                 log('completed segment: ',  seg.basename, log_level=3)
@@ -341,8 +347,8 @@ def file_manager(d, q, keep_segments=True):
             if d.status != Status.downloading or q.get_nowait() == 'quit':
                 # print('--------------file manager cancelled-----------------')
                 break
-        except:
-            pass
+        except Exception as e:
+            log(f'Error checking status: {e}', log_level=3)
 
     # save progress info for future resuming
     if os.path.isdir(d.temp_folder):
@@ -487,75 +493,74 @@ def thread_manager(d, q):
             worker_sl = (config.speed_limit // allowable_connections) if allowable_connections else 0
 
         # Threads ------------------------------------------------------------------------------------------------------
-        if d.status == Status.downloading:
-            if free_workers and num_live_threads < allowable_connections:
-                seg = None
-                if job_list:
-                    seg = job_list.pop()
+        if d.status == Status.downloading and free_workers and num_live_threads < allowable_connections:
+            seg = None
+            if job_list:
+                seg = job_list.pop()
 
-                # Auto file segmentation, share segments and help other workers
-                elif time.time() - segmentation_timer >= 1:
-                    segmentation_timer = time.time()
+            # Auto file segmentation, share segments and help other workers
+            elif time.time() - segmentation_timer >= 1:
+                segmentation_timer = time.time()
 
-                    # calculate minimum segment size based on speed, e.g. for 3 MB/s speed, and 2 live threads,
-                    # worker speed = 1.5 MB/sec, min seg size will be 1.5 x 6 = 9 MB
-                    worker_speed = d.speed // num_live_threads if num_live_threads else 0
-                    min_seg_size = max(config.SEGMENT_SIZE, worker_speed * 6)
+                # calculate minimum segment size based on speed, e.g. for 3 MB/s speed, and 2 live threads,
+                # worker speed = 1.5 MB/sec, min seg size will be 1.5 x 6 = 9 MB
+                worker_speed = d.speed // num_live_threads if num_live_threads else 0
+                min_seg_size = max(config.SEGMENT_SIZE, worker_speed * 6)
 
-                    filtered_segs = [seg for seg in d.segments if seg.range is not None
-                                      and seg.remaining > min_seg_size * 2]
+                filtered_segs = [seg for seg in d.segments if seg.range is not None
+                                  and seg.remaining > min_seg_size * 2]
 
-                    # sort segments based on its ranges smaller ranges at the end
-                    filtered_segs = sort_segs(filtered_segs)
+                # sort segments based on its ranges smaller ranges at the end
+                filtered_segs = sort_segs(filtered_segs)
 
-                    if filtered_segs:
-                        current_seg = filtered_segs.pop()
+                if filtered_segs:
+                    current_seg = filtered_segs.pop()
 
-                        # range boundaries
-                        start = current_seg.range[0]
-                        middle = start + current_seg.current_size + current_seg.remaining // 2
-                        end = current_seg.range[1]
+                    # range boundaries
+                    start = current_seg.range[0]
+                    middle = start + current_seg.current_size + current_seg.remaining // 2
+                    end = current_seg.range[1]
 
-                        # assign new range for current segment
-                        current_seg.range = [start, middle]
+                    # assign new range for current segment
+                    current_seg.range = [start, middle]
 
-                        # create new segment
-                        seg = Segment(name=os.path.join(d.temp_folder, f'{len(d.segments)}'), url=current_seg.url,
-                                      tempfile=current_seg.tempfile, range=[middle + 1, end],
-                                      media_type=current_seg.media_type)
+                    # create new segment
+                    seg = Segment(name=os.path.join(d.temp_folder, f'{len(d.segments)}'), url=current_seg.url,
+                                  tempfile=current_seg.tempfile, range=[middle + 1, end],
+                                  media_type=current_seg.media_type)
 
-                        # add to segments
-                        d.segments.append(seg)
-                        log('-' * 10, f'new segment: {seg.basename} {seg.range}, updated seg {current_seg.basename} '
-                                      f'{current_seg.range}, minimum seg size:{format_bytes(min_seg_size)}', log_level=3)
+                    # add to segments
+                    d.segments.append(seg)
+                    log('-' * 10, f'new segment: {seg.basename} {seg.range}, updated seg {current_seg.basename} '
+                                  f'{current_seg.range}, minimum seg size:{format_bytes(min_seg_size)}', log_level=3)
 
-                if seg and not seg.downloaded and not seg.locked:
-                    worker = free_workers.pop()
-                    # sometimes download chokes when remaining only one worker, will set higher minimum speed and
-                    # less timeout for last workers batch
-                    if len(job_list) + config.jobs_q.qsize() <= allowable_connections:
-                        # worker will abort if speed less than 20 KB for 10 seconds
-                        minimum_speed, timeout = 20 * 1024, 10
+            if seg and not seg.downloaded and not seg.locked:
+                worker = free_workers.pop()
+                # sometimes download chokes when remaining only one worker, will set higher minimum speed and
+                # less timeout for last workers batch
+                if len(job_list) + config.jobs_q.qsize() <= allowable_connections:
+                    # worker will abort if speed less than 20 KB for 10 seconds
+                    minimum_speed, timeout = 20 * 1024, 10
+                else:
+                    minimum_speed = timeout = None  # default as in utils.set_curl_option
+
+                ready = worker.reuse(seg=seg, speed_limit=worker_sl, minimum_speed=minimum_speed, timeout=timeout)
+                if ready:
+                    # check max download retries
+                    if seg.retries >= config.max_seg_retries:
+                        log('seg:', seg.basename, f'exceeded max. of ({config.max_seg_retries}) download retries,',
+                            'try to decrease num of connections in settings and try again')
+                        d.status = Status.error
                     else:
-                        minimum_speed = timeout = None  # default as in utils.set_curl_option
+                        seg.retries += 1
 
-                    ready = worker.reuse(seg=seg, speed_limit=worker_sl, minimum_speed=minimum_speed, timeout=timeout)
-                    if ready:
-                        # check max download retries
-                        if seg.retries >= config.max_seg_retries:
-                            log('seg:', seg.basename, f'exceeded max. of ({config.max_seg_retries}) download retries,',
-                                'try to decrease num of connections in settings and try again')
-                            d.status = Status.error
-                        else:
-                            seg.retries += 1
+                        thread = Thread(target=worker.run, daemon=True)
+                        thread.start()
+                        threads_to_workers[thread] = worker
 
-                            thread = Thread(target=worker.run, daemon=True)
-                            thread.start()
-                            threads_to_workers[thread] = worker
-
-                            # save progress info for future resuming
-                            if os.path.isdir(d.temp_folder):
-                                d.save_progress_info()
+                        # save progress info for future resuming
+                        if os.path.isdir(d.temp_folder):
+                            d.save_progress_info()
 
         # check thread completion
         for thread in list(threads_to_workers.keys()):
@@ -583,8 +588,8 @@ def thread_manager(d, q):
         try:
             if d.status != Status.downloading or q.get_nowait() == 'quit':
                 break
-        except:
-            pass
+        except Exception as e:
+            log(f'Error monitoring status: {e}', log_level=3)
 
     # update d param
     d.live_connections = 0
@@ -606,8 +611,8 @@ def fpr(d, q):
         try:
             if d.status not in config.Status.active_states or q.get_nowait() == 'quit':
                 break
-        except:
-            pass
+        except Exception as e:
+            log(f'fpr() error: {e}', log_level=3)
 
         time.sleep(1)
 
@@ -624,8 +629,8 @@ def spr(d, q):
         try:
             if d.status not in config.Status.active_states or q.get_nowait() == 'quit':
                 break
-        except:
-            pass
+        except Exception as e:
+            log(f'spr() error: {e}', log_level=3)
 
         # report active blocks only
         d.update_segments_progress(activeonly=True)

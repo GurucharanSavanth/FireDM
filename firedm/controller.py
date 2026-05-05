@@ -14,38 +14,55 @@
         Model and controller has an observer system where model will notify controller when changed, in turn
         controller will update the current view
 """
+import contextlib
+import os
 import re
+import sys
 import threading
-from multiprocessing.connection import AuthenticationError
-from datetime import datetime
-import os, sys, time
+import time
 from copy import copy
-from threading import Thread
-from queue import Queue
-from datetime import date
+from datetime import date, datetime
 from email.utils import parsedate_to_datetime
+from multiprocessing.connection import AuthenticationError
+from queue import Queue
+from threading import Thread
 from urllib.parse import urlsplit
 
-try:
-    from ctypes import windll, wintypes, byref
-except:
-    pass
+with contextlib.suppress(BaseException):
+    from ctypes import byref, windll, wintypes
 
-from . import update
-from .utils import *
-from . import setting
-from . import config
-from .config import Status, MediaType
-from .ffmpeg_service import locate_ffmpeg
-from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
-from .playlist_builder import build_playlist_from_info
-from .playlist_entry import normalize_entry
+from . import config, setting, update, video
 from .brain import brain
+from .config import MediaType, Status
 from .download_engines.runtime_bridge import evaluate_engine_for_download_item
-from . import video
-from .video import get_media_info, process_video
+from .ffmpeg_service import locate_ffmpeg
 from .model import ObservableDownloadItem, ObservableVideo
 from .native_messaging import MAX_NATIVE_MESSAGE_BYTES, decode_controller_payload, load_or_create_secret, make_listener
+from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
+from .playlist_builder import build_playlist_from_info
+from .utils import (
+    auto_rename,
+    calc_md5_sha256,
+    check_write_permission,
+    delete_file,
+    download,
+    format_bytes,
+    get_headers,
+    get_pkg_version,
+    ignore_errors,
+    log,
+    open_file,
+    open_folder,
+    open_webpage,
+    rename_file,
+    run_command,
+    run_thread,
+    thread_after,
+    threaded,
+    update_object,
+    validate_file_name,
+)
+from .video import get_media_info, process_video
 
 
 def set_option(**kwargs):
@@ -59,15 +76,16 @@ def set_option(**kwargs):
                 PluginRegistry.fire_hook('config_change', k, v)
         except Exception:
             pass
-    except:
-        pass
+    except Exception as e:
+        log(f'set_option error: {e}', log_level=3)
 
 
 def get_option(key, default=None):
     """get global setting option(s) in config.py"""
     try:
         return config.__dict__.get(key, default)
-    except:
+    except Exception as e:
+        log(f'get_option error: {e}', log_level=3)
         return None
 
 
@@ -102,7 +120,7 @@ def check_ffmpeg():
     if ffmpeg_info.found:
         log(f'ffmpeg is not usable: {failure} - at: {ffmpeg_info.path}')
     else:
-        log(f'can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
+        log('can not find ffmpeg!!, install it, or add executable location to PATH, or copy executable to ',
             config.global_sett_folder, 'or', config.current_directory)
     pipeline_event(
         PipelineStage.FFMPEG_DISCOVER,
@@ -133,8 +151,8 @@ def write_timestamp(d):
                 # assume this is a video file, get upload date
                 upload_date = d.vid_info.get('upload_date')  # YYYYMMDD e.g. 20201009
                 timestamp = time.mktime(time.strptime(upload_date, '%Y%m%d'))
-            except:
-                pass
+            except Exception as e:
+                log(f'Error parsing upload date: {e}', log_level=3)
 
             if not timestamp:
                 # get last modified timestamp from server,  eg.    'last-modified': 'Fri, 22 Feb 2019 09:30:09 GMT'
@@ -324,7 +342,9 @@ class Controller:
 
     _instance = None  # Singleton reference for plugin access via Controller._instance
 
-    def __init__(self, view_class, custom_settings={}):
+    def __init__(self, view_class, custom_settings=None):
+        if custom_settings is None:
+            custom_settings = {}
         Controller._instance = self
         self._native_endpoint_ready = False
         self._native_listener = None
@@ -412,10 +432,8 @@ class Controller:
         listener = self._native_listener
         self._native_listener = None
         if listener is not None:
-            try:
+            with contextlib.suppress(Exception):
                 listener.close()
-            except Exception:
-                pass
 
     def _native_control_loop(self):
         while not self._native_control_stop.is_set():
@@ -438,10 +456,8 @@ class Controller:
                 log('Native messaging message rejected:', e, log_level=2)
             finally:
                 if conn is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         conn.close()
-                    except Exception:
-                        pass
 
     def _handle_native_message(self, msg):
         if not isinstance(msg, dict):
@@ -537,8 +553,8 @@ class Controller:
                         refreshed_d.select_audio(selected_audio_stream)
                         log('selected audio:    ', d.audio_quality)
                         log('New selected audio:', refreshed_d.audio_quality)
-                    except:
-                        pass
+                    except Exception as e:
+                        log(f'Error selecting audio: {e}', log_level=3)
 
                 # update old object
                 d.__dict__.update(refreshed_d.__dict__)
@@ -623,7 +639,7 @@ class Controller:
         report_interval = 0.5  # sec
 
         while True:
-            for i in range(self.observer_q.qsize()):
+            for _i in range(self.observer_q.qsize()):
                 item = self.observer_q.get()
                 uid = item.get('uid')
                 if uid:
@@ -648,7 +664,7 @@ class Controller:
 
             if d is not None:
                 # readonly properties will not be reported by ObservableDownloadItem
-                downloaded = kwargs.get('downloaded', None)
+                downloaded = kwargs.get('downloaded')
                 if downloaded:
                     extra = {k: getattr(d, k, None) for k in ['progress', 'speed', 'eta']}
                     # print('extra:', extra)
@@ -827,7 +843,7 @@ class Controller:
         for idx, title in selected_items.items():
             d = playlist[idx]
 
-            for i in range(10):
+            for _ in range(10):
                 if not d.busy:
                     break
                 time.sleep(1)
@@ -932,14 +948,11 @@ class Controller:
 
     def _finalize_plugin_completed_download(self, d):
         source = getattr(d, '_plugin_completed_file', '')
-        if source and os.path.isfile(source) and source != d.target_file:
-            if not rename_file(source, d.target_file):
-                d.status = Status.error
-                return False
-        try:
+        if source and os.path.isfile(source) and source != d.target_file and not rename_file(source, d.target_file):
+            d.status = Status.error
+            return False
+        with contextlib.suppress(Exception):
             d.delete_tempfiles()
-        except Exception:
-            pass
         return True
 
     def _pre_download_checks(self, d, silent=False, force_rename=False):
@@ -986,17 +999,16 @@ class Controller:
             return False
 
         # check for ffmpeg availability
-        if d.type in (MediaType.video, MediaType.audio, MediaType.key):
-            if not check_ffmpeg():
+        if d.type in (MediaType.video, MediaType.audio, MediaType.key) and not check_ffmpeg():
 
-                if not silent and config.operating_system == 'Windows':
-                    res = self.get_user_response(popup_id=2)
-                    if res == 'Open Help':
-                        self.open_ffmpeg_help()
-                else:
-                    log('FFMPEG is missing', start='', showpopup=showpopup)
+            if not silent and config.operating_system == 'Windows':
+                res = self.get_user_response(popup_id=2)
+                if res == 'Open Help':
+                    self.open_ffmpeg_help()
+            else:
+                log('FFMPEG is missing', start='', showpopup=showpopup)
 
-                return False
+            return False
 
         # in case of missing download folder value will fallback to current download folder
         folder = d.folder or config.download_folder
@@ -1090,11 +1102,8 @@ class Controller:
                 return False
 
         # Plugin hook: download_start — plugins may block or modify the download
-        if not plugin_start_fired and not self._fire_download_start_plugins(d):
-            return False
-
         # if above checks passed will return True
-        return True
+        return plugin_start_fired or self._fire_download_start_plugins(d)
 
     def download(self, d=None, uid=None, video_idx=None, silent=False, download_later=False, **kwargs):
         showpopup = not silent
@@ -1323,7 +1332,7 @@ class Controller:
             process_video(d)
 
         # set video quality
-        quality = kwargs.get('quality', None)
+        quality = kwargs.get('quality')
 
         if quality and d.type == MediaType.video:
             prefer_mp4 = kwargs.get('prefer_mp4', False)
@@ -1514,7 +1523,8 @@ class Controller:
             else:
                 try:
                     last_check = date(*config.last_update_check)
-                except:
+                except Exception as e:
+                    log(f'Error parsing update check date: {e}', log_level=3)
                     last_check = today
                     config.last_update_check = (today.year, today.month, today.day)
 
@@ -1800,7 +1810,8 @@ class Controller:
                 d = self.playlist[video_idx]
             else:
                 d = self.playlist[0]
-        except:
+        except Exception as e:
+            log(f'Error accessing download item: {e}', log_level=3)
             d = None
 
         return d
@@ -1860,23 +1871,22 @@ class Controller:
                 if [d for d in self.d_map.values() if d.status in Status.active_states]:
                     trigger = True
 
-                elif trigger:
+                elif trigger and not [d for d in self.d_map.values() if d.status in Status.active_states or d.status == Status.pending]:
                     # check if items no longer active or pending
-                    if not [d for d in self.d_map.values() if d.status in Status.active_states or d.status == Status.pending]:
-                        # reset the trigger
-                        trigger = False
+                    # reset the trigger
+                    trigger = False
 
-                        # execute command
-                        if config.on_completion_command:
-                            run_command(config.on_completion_command)
+                    # execute command
+                    if config.on_completion_command:
+                        run_command(config.on_completion_command)
 
-                        # shutdown
-                        if config.shutdown_pc:
-                            self.shutdown_pc()
+                    # shutdown
+                    if config.shutdown_pc:
+                        self.shutdown_pc()
 
-                        # exit application
-                        if config.on_completion_exit:
-                            self.quit()
+                    # exit application
+                    if config.on_completion_exit:
+                        self.quit()
             else:
                 trigger = False
 
@@ -1944,7 +1954,7 @@ class Controller:
     # endregion
 
     # region general
-    def get_user_response(self, msg='', options=[], popup_id=None):
+    def get_user_response(self, msg='', options=None, popup_id=None):
         """get user response from current view
 
         Args:
@@ -1956,6 +1966,8 @@ class Controller:
             (str): response from user as a selected item from "options"
         """
 
+        if options is None:
+            options = []
         if popup_id:
             popup = config.get_popup(popup_id)
             msg = popup['body']
@@ -2006,7 +2018,7 @@ class Controller:
             update_object(d, kwargs)
 
             # set video quality
-            quality = kwargs.get('quality', None)
+            quality = kwargs.get('quality')
 
             if quality and d.type == MediaType.video:
                 prefer_mp4 = kwargs.get('prefer_mp4', False)
@@ -2072,7 +2084,7 @@ class Controller:
                 log('ffmpeg missing, abort')
                 return
 
-            msg = f'Available streams:'
+            msg = 'Available streams:'
             options = [f'{s.mediatype} {"video" if s.mediatype != "audio" else "only"}: {str(s)}' for s in
                        d.all_streams]
             selection = self.get_user_response(msg, options)
@@ -2080,14 +2092,14 @@ class Controller:
             d.selected_stream = d.all_streams[idx]
 
             if 'dash' in d.subtype_list:
-                msg = f'Audio Formats:'
+                msg = 'Audio Formats:'
                 options = d.audio_streams
                 audio = self.get_user_response(msg, options)
                 d.select_audio(audio)
 
         # check if file exist
         if os.path.isfile(d.target_file):
-            msg = f'file with the same name already exist:'
+            msg = 'file with the same name already exist:'
             options = ['Overwrite', 'Rename', 'Cancel']
             r = self.get_user_response(msg, options)
             if r == options[0]:
@@ -2105,7 +2117,7 @@ class Controller:
             msg += f'selected audio stream: {d.audio_stream}\n'
 
         msg += 'folder:' + d.folder + '\n'
-        msg += f'Start Downloading?'
+        msg += 'Start Downloading?'
         options = ['Ok', 'Cancel']
         r = self.get_user_response(msg, options)
         if r == options[1]:

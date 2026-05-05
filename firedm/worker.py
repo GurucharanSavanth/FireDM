@@ -11,15 +11,17 @@
 
 # todo: change docstring to google format and clean unused code
 
+import contextlib
 import os
-import time
 import ssl
+import time
 from urllib.parse import unquote, urlparse
+
 import pycurl
 
 from . import config
-from .config import Status, error_q, jobs_q, max_seg_retries
-from .utils import log, set_curl_options, format_bytes, translate_server_code
+from .config import Status, error_q, jobs_q
+from .utils import format_bytes, log, set_curl_options, translate_server_code
 
 
 class Worker:
@@ -152,15 +154,7 @@ class Worker:
     def verify(self):
         """check if segment completed"""
         # unknown segment size, will report done if there is any downloaded data > 0
-        if self.seg.size == 0 and self.seg.current_size > 0:
-            return True
-
-        # segment has a known size
-        elif self.seg.current_size >= self.seg.size:
-            return True
-
-        else:
-            return False
+        return bool(self.seg.size == 0 and self.seg.current_size > 0 or self.seg.current_size >= self.seg.size)
 
     def report_not_completed(self):
         log('Seg', self.seg.basename, 'did not complete', '- done', format_bytes(self.seg.current_size), '- target size:',
@@ -230,11 +224,10 @@ class Worker:
                 self.seg.size = int(self.headers.get('content-length', 0))
 
                 seg = self.seg
-                if seg.size and len(self.d.segments) == 1:
-                    if all([x not in self.d.subtype_list for x in ('hls', 'fragmented')]) and not seg.range:
-                        seg.range = [0, seg.size - 1]
+                if seg.size and len(self.d.segments) == 1 and all([x not in self.d.subtype_list for x in ('hls', 'fragmented')]) and not seg.range:
+                    seg.range = [0, seg.size - 1]
                 # print('self.seg.size = ', self.seg.size)
-            except:
+            except Exception:
                 pass
 
     def progress(self, *args):
@@ -342,13 +335,11 @@ class Worker:
 
             start_byte = self.resume_range[0] if self.resume_range else 0
             rest = start_byte if start_byte else None
-            self.file = open(self.seg.name, self.mode, buffering=0)
-            ftp.retrbinary(f'RETR {unquote(parsed.path)}', self._write_protocol_chunk, blocksize=65536, rest=rest)
+            with open(self.seg.name, self.mode, buffering=0) as self.file:
+                ftp.retrbinary(f'RETR {unquote(parsed.path)}', self._write_protocol_chunk, blocksize=65536, rest=rest)
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 ftp.quit()
-            except Exception:
-                pass
 
     def _sftp_download(self):
         try:
@@ -363,8 +354,7 @@ class Worker:
             sftp = paramiko.SFTPClient.from_transport(transport)
             try:
                 start_byte = self.resume_range[0] if self.resume_range else 0
-                self.file = open(self.seg.name, self.mode, buffering=0)
-                with sftp.file(unquote(parsed.path), 'rb') as remote:
+                with open(self.seg.name, self.mode, buffering=0) as self.file, sftp.file(unquote(parsed.path), 'rb') as remote:
                     if start_byte:
                         remote.seek(start_byte)
                     while True:
@@ -392,8 +382,7 @@ class Worker:
         context = None
         if scheme == 'https' and config.ignore_ssl_cert:
             context = ssl._create_unverified_context()
-        self.file = open(self.seg.name, self.mode, buffering=0)
-        with urllib.request.urlopen(request, timeout=30, context=context) as response:
+        with open(self.seg.name, self.mode, buffering=0) as self.file, urllib.request.urlopen(request, timeout=30, context=context) as response:
             while True:
                 chunk = response.read(65536)
                 if not chunk:
@@ -426,24 +415,23 @@ class Worker:
                 self.set_options()
 
                 # open segment file
-                self.file = open(self.seg.name, self.mode, buffering=0)
+                with open(self.seg.name, self.mode, buffering=0) as self.file:
+                    # Main Libcurl operation
+                    self.c.perform()
 
-                # Main Libcurl operation
-                self.c.perform()
+                    # get response code and check for connection errors
+                    response_code = self.c.getinfo(pycurl.RESPONSE_CODE)
+                    if response_code in range(400, 512):
+                        log('Seg', self.seg.basename, 'server refuse connection', response_code, translate_server_code(response_code),
+                            'content type:', self.headers.get('content-type'), log_level=3)
 
-                # get response code and check for connection errors
-                response_code = self.c.getinfo(pycurl.RESPONSE_CODE)
-                if response_code in range(400, 512):
-                    log('Seg', self.seg.basename, 'server refuse connection', response_code, translate_server_code(response_code),
-                        'content type:', self.headers.get('content-type'), log_level=3)
-
-                    # send error to thread manager, it will reduce connections number to fix this error
-                    self.report_error(f'server refuse connection: {response_code}, {translate_server_code(response_code)}')
+                        # send error to thread manager, it will reduce connections number to fix this error
+                        self.report_error(f'server refuse connection: {response_code}, {translate_server_code(response_code)}')
 
         except Exception as e:
             # this error generated when user cancel download, or write function abort
             if '23' in repr(e) or '42' in repr(e):  # ('Failed writing body', 'Callback aborted')
-                error = f'terminated'
+                error = 'terminated'
                 log('Seg', self.seg.basename, error, 'worker', self.tag, log_level=3)
             else:
                 error = repr(e)
@@ -494,7 +482,7 @@ class Worker:
                     self.report_error('received html contents')
 
                     return -1  # abort
-            except Exception as e:
+            except Exception:
                 pass
                 # log('worker:', e)
 

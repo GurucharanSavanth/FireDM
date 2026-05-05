@@ -9,14 +9,13 @@ supported domains when possible.
 Default OFF.
 """
 import json
-import os
 import re
 import urllib.request
 from urllib.parse import urlparse
 
-from .registry import PluginBase, PluginMeta, PluginRegistry
 from .. import config
 from ..utils import log
+from .registry import PluginBase, PluginMeta, PluginRegistry
 
 META = PluginMeta(
     name='native_extractors',
@@ -53,7 +52,7 @@ class NativeExtractorsPlugin(PluginBase):
         except Exception:
             return True
 
-        domain = parsed.netloc.lower().lstrip('www.')
+        domain = parsed.netloc.lower().removeprefix('www.')
         extractor = self._extractors.get(domain)
         if not extractor:
             return True

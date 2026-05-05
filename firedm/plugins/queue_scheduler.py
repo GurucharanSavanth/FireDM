@@ -4,14 +4,13 @@
 # User Toggle: GUI → Settings → Plugin Manager
 """Queue and scheduler plugin."""
 
-import os
-import time
 import threading
+import time
 from datetime import datetime
 
-from .registry import PluginBase, PluginMeta, PluginRegistry
 from .. import config
 from ..utils import log
+from .registry import PluginBase, PluginMeta, PluginRegistry
 
 META = PluginMeta(
     name='queue_scheduler',

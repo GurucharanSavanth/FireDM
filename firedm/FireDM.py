@@ -21,8 +21,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Sequence
-from pathlib import Path
-from typing import Any, Dict, Optional, Sequence as SequenceType
+from typing import Any
 
 # This code should stay on top to handle relative imports in case of direct call of FireDM.py
 if __package__ is None:
@@ -55,7 +54,7 @@ def open_config_editor(executable: str, config_fp: str) -> int:
     return result.returncode
 
 
-def pars_args(arguments: list[str]) -> Dict[str, Any]:
+def pars_args(arguments: list[str]) -> dict[str, Any]:
     """Parse arguments vector.
 
     Args:
@@ -387,7 +386,7 @@ def import_diagnostics() -> None:
     logger.info(f'Done, importing modules, total time: {round(total_time, 2)} sec ...')
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     """Application main entry point.
 
     Args:

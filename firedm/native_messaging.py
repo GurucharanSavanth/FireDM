@@ -6,6 +6,7 @@ controller and the browser native-host process, so it must not print to stdout.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import stat
@@ -62,16 +63,12 @@ def load_or_create_secret(settings_folder: str | os.PathLike[str] | None = None)
         with os.fdopen(fd, "wb") as handle:
             handle.write(secret)
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
         raise
 
-    try:
+    with contextlib.suppress(OSError):
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    except OSError:
-        pass
     return secret
 
 

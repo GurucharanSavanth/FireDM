@@ -12,7 +12,7 @@ FIREDM_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if FIREDM_DIR not in sys.path:
     sys.path.insert(0, FIREDM_DIR)
 
-from firedm.native_messaging import MAX_NATIVE_MESSAGE_BYTES, load_or_create_secret, send_to_controller
+from firedm.native_messaging import MAX_NATIVE_MESSAGE_BYTES, load_or_create_secret, send_to_controller  # noqa: E402
 
 
 def _log_error(*parts):

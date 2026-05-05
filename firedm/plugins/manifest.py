@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .policy import blocked_plugin_reason
 from .registry import PluginMeta, PluginRegistry
@@ -74,7 +74,7 @@ class PluginManifestSection:
     planned: tuple[PluginManifestEntry, ...] = ()
     discovery_warnings: tuple[str, ...] = ()
 
-    def to_serializable(self) -> Dict[str, Any]:
+    def to_serializable(self) -> dict[str, Any]:
         """Convert to serializable dictionary."""
         return {
             "included": [_entry_to_dict(entry) for entry in self.included],
@@ -84,11 +84,11 @@ class PluginManifestSection:
         }
 
     @property
-    def all_entries(self) -> Tuple[PluginManifestEntry, ...]:
+    def all_entries(self) -> tuple[PluginManifestEntry, ...]:
         return self.included + self.blocked + self.planned
 
 
-def _entry_to_dict(entry: PluginManifestEntry) -> Dict[str, Any]:
+def _entry_to_dict(entry: PluginManifestEntry) -> dict[str, Any]:
     """Convert a manifest entry to a serializable dictionary."""
     return {
         "plugin_id": entry.plugin_id,
@@ -134,7 +134,7 @@ def entry_from_meta(
 def discover_plugin_manifest(
     *,
     scan: bool = True,
-    blocked_overrides: Iterable[Tuple[str, str]] = (),
+    blocked_overrides: Iterable[tuple[str, str]] = (),
 ) -> PluginManifestSection:
     """Inspect the PluginRegistry and return a release-safe manifest section.
 
@@ -147,7 +147,7 @@ def discover_plugin_manifest(
     Returns:
         PluginManifestSection with included, blocked, and planned plugins.
     """
-    warnings: List[str] = []
+    warnings: list[str] = []
     if scan:
         try:
             PluginRegistry.scan_plugins()
@@ -157,8 +157,8 @@ def discover_plugin_manifest(
     blocked_map = {plugin_id: reason for plugin_id, reason in blocked_overrides}
     metas = PluginRegistry.get_plugin_list()
 
-    included: List[PluginManifestEntry] = []
-    blocked: List[PluginManifestEntry] = []
+    included: list[PluginManifestEntry] = []
+    blocked: list[PluginManifestEntry] = []
 
     for meta in metas:
         reason = blocked_map.get(meta.name) or blocked_plugin_reason(meta.name)
@@ -179,7 +179,7 @@ def discover_plugin_manifest(
 
 def render_text_summary(section: PluginManifestSection) -> str:
     """Generate single-line-per-entry text summary for build.log/manifest preview."""
-    lines: List[str] = []
+    lines: list[str] = []
     for entry in section.included:
         lines.append(f"included {entry.plugin_id} v{entry.version} [{entry.status}]")
     for entry in section.blocked:

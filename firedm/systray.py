@@ -10,12 +10,14 @@
         system tray icon based on GTK and pystray, tested on windows and Manjaro using GTK 3.0
 """
 
+import contextlib
 import os
+
 import awesometkinter as atk
 
 from . import config
 from .iconsbase64 import APP_ICON
-from .utils import log, delete_file
+from .utils import delete_file, log
 
 
 class SysTray:
@@ -108,7 +110,7 @@ class SysTray:
                     log('Systray active backend: Gtk.AppIndicator')
                     Gtk.main()
                     return
-                except:
+                except Exception:
                     pass
 
                 # try GTK StatusIcon
@@ -134,7 +136,7 @@ class SysTray:
                 from pystray import Icon, Menu, MenuItem
                 items = []
                 for option, callback in options_map.items():
-                    items.append(MenuItem(option, callback, default=True if option == 'Show' else False))
+                    items.append(MenuItem(option, callback, default=option == 'Show'))
 
                 menu = Menu(*items)
                 self.icon = Icon(config.APP_NAME, self.tray_icon, menu=menu)
@@ -148,22 +150,18 @@ class SysTray:
         try:
             self.active = False
             self.icon.stop()  # must be called from main thread
-        except:
+        except Exception:
             pass
 
-        try:
+        with contextlib.suppress(Exception):
             # if we use Gtk notify we should deinitialize
             self.Gtk_notify.uninit()
-        except:
-            pass
 
-        try:
-            # Gtk.main_quit(), if called from a thread might raise 
+        with contextlib.suppress(Exception):
+            # Gtk.main_quit(), if called from a thread might raise
             # (Gtk-CRITICAL **:gtk_main_quit: assertion 'main_loops != NULL' failed)
             # should call this from main thread
             self.Gtk.main_quit()
-        except:
-            pass
 
     def notify(self, msg, title=None):
         """show os notifications, e.g. balloon pop up at systray icon on windows"""
@@ -173,13 +171,13 @@ class SysTray:
         else:
             try:
                 self.Gtk_notify.Notification.new(title, msg, self.tray_icon_path).show()  # to show notification
-            except:
+            except Exception:
                 try:
                     # fallback to plyer
                     import plyer
                     plyer.notification.notify(message=msg, title=title, app_name=config.APP_NAME,
                                               app_icon=self.tray_icon_path, timeout=5)
-                except:
+                except Exception:
                     pass
 
     def quit(self, *args):

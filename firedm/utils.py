@@ -8,27 +8,27 @@
 """
 import ast
 import datetime
-import os
-import io
 import hashlib
-import time
-import re
 import importlib
-from importlib.util import find_spec
-import webbrowser
-from threading import Thread
-import subprocess
-import shlex
-import certifi
-import shutil
+import io
 import json
-import zipfile
-import tarfile
 import ntpath
-import urllib.request
+import os
 import platform
+import re
+import shlex
+import shutil
 import subprocess
+import tarfile
+import time
+import urllib.request
+import webbrowser
+import zipfile
+from importlib.util import find_spec
+from threading import Thread
 from urllib.parse import urlsplit
+
+import certifi
 
 # Protocols that FireDM is willing to talk over its pycurl-backed downloader.
 # libcurl is built with file/ftp/dict/gopher/smb/telnet/tftp support; without
@@ -55,12 +55,14 @@ def is_allowed_network_url(url):
 # 3rd party
 try:
     import pycurl
-except:
+except Exception:
     print('pycurl not found')
 
 __package__ = 'firedm'
 
-from . import config
+import contextlib  # noqa: E402
+
+from . import config  # noqa: E402
 
 
 def threaded(func):
@@ -92,7 +94,7 @@ def ignore_errors(func):
     def wraper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except:
+        except Exception:
             pass
 
     return wraper
@@ -226,10 +228,8 @@ def get_headers(url, verbose=False, http_headers=None, seg_range=None):
 
     def debug_callback(handle, type, data, size=0, userdata=''):
         """it takes output from curl verbose and pass it to my log function"""
-        try:
+        with contextlib.suppress(BaseException):
             log(data.decode("utf-8"))
-        except:
-            pass
         return 0
 
     # region curl options
@@ -339,11 +339,10 @@ def download(url, fp=None, verbose=True, http_headers=None, decode=True, return_
         # close curl
         c.close()
 
-        if return_buffer:
-            buffer.seek(0)
-            return buffer
-        else:
-            return data
+    if return_buffer:
+        buffer.seek(0)
+        return buffer
+    return data
 
 
 def simpledownload(url, fp=None, return_data=True, overwrite=False):
@@ -372,10 +371,7 @@ def simpledownload(url, fp=None, return_data=True, overwrite=False):
 
             elapsed_time = time.time() - start
 
-            if elapsed_time:
-                speed = format_bytes(round(len(chunk) / elapsed_time, 1), tail='/s')
-            else:
-                speed = ''
+            speed = format_bytes(round(len(chunk) / elapsed_time, 1), tail='/s') if elapsed_time else ''
             percent = done * 100 // size if size else 0
             bar_length = percent // 10
             progress_bar = f'[{"=" * bar_length}{" " * (10 - bar_length)}]'
@@ -440,12 +436,7 @@ def validate_file_name(fname):
 
     def replace(c):
         # filter for tkinter safe character range
-        if ord(c) not in range(65536):
-            return ''
-        # The first 32 characters in the ASCII-table are unprintable control codes, 127 epresents the command DEL.
-        elif ord(c) < 32 or ord(c) == 127:
-            return ''
-        elif c in '\'"':
+        if ord(c) not in range(65536) or ord(c) < 32 or ord(c) == 127 or c in '\'"':
             return ''
         elif c in '~`#$&*()\\|[]{};<>/?!^,:':
             return '_'
@@ -459,7 +450,7 @@ def validate_file_name(fname):
         # https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN
         if len(clean_name) > 255:
             clean_name = clean_name[0:245] + clean_name[-10:]  # add last 10 characters "including file extension"
-    except:
+    except Exception:
         clean_name = fname
 
     return clean_name
@@ -589,10 +580,8 @@ def print_object(obj):
         print(obj, 'is None')
         return
     for k, v in vars(obj).items():
-        try:
+        with contextlib.suppress(BaseException):
             print(k, '=', v)
-        except:
-            pass
 
 
 def update_object(obj, new_values):
@@ -770,7 +759,7 @@ def open_folder(path):
 
 def load_json(fp):
     try:
-        with open(fp, 'r') as f:
+        with open(fp) as f:
             data = json.load(f)
         return data
     except Exception as e:
@@ -798,8 +787,10 @@ def natural_sort(my_list):
         >>> sorted(['c2', 'c10', 'c1'])
         ['c1', 'c10', 'c2']
     """
-    convert = lambda text: int(text) if text.isdigit() else text
-    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+    def convert(text):
+        return int(text) if text.isdigit() else text
+    def alphanum_key(key):
+        return [convert(c) for c in re.split('([0-9]+)', key)]
     return sorted(my_list, key=alphanum_key)
 
 
@@ -840,7 +831,7 @@ def format_seconds(t, tail='', sep=' ', percision=1, fullunit=False):
                     s = 's' if num > 1 and fullunit else ''
                     result = f'{num}{sep}{unit}{s}{tail}'
                     break
-    except:
+    except Exception:
         pass
 
     return result
@@ -881,7 +872,7 @@ def parse_bytes(bytestr):
         unit = matchobj.group(2).lower()[0:1] if matchobj.group(2) else ''
         multiplier = 1024.0 ** 'bkmgtpezy'.index(unit)
         return int(round(number * multiplier))
-    except:
+    except Exception:
         return 0
 
 
@@ -914,7 +905,7 @@ def format_bytes(bytesint, tail='', sep=' ', percision=2):
                 # remove zeros after decimal point
                 num = int(num) if num % 1 == 0 else num
                 return f'{num}{sep}{unit}{tail}'
-    except:
+    except Exception:
         return bytesint
 
 
@@ -931,10 +922,7 @@ def is_pkg_exist(pkg_name):
     False
     """
     pkg_name = pkg_name.strip()
-    if importlib.util.find_spec(pkg_name) is not None:
-        return True
-    else:
-        return False
+    return importlib.util.find_spec(pkg_name) is not None
 
 
 def auto_rename(file_name, forbidden_names):
@@ -978,23 +966,32 @@ def calc_md5(fp=None, buffer=None):
     """
     try:
         if fp:
-            buffer = open(fp, 'rb')
+            with open(fp, 'rb') as buffer:
+                md5_hash = hashlib.md5()
 
-        md5_hash = hashlib.md5()
+                # read file in chunks to save memory in case of big files
+                chunk_size = 1024 * 1024  # 1 Megabyte at a time
 
-        # read file in chunks to save memory in case of big files
-        chunk_size = 1024 * 1024  # 1 Megabyte at a time
+                while True:
+                    chunk = buffer.read(chunk_size)
+                    if not chunk:
+                        break
+                    md5_hash.update(chunk)
 
-        while True:
-            chunk = buffer.read(chunk_size)
-            if not chunk:
-                break
-            md5_hash.update(chunk)
+                return md5_hash.hexdigest()
+        else:
+            md5_hash = hashlib.md5()
 
-        if fp:
-            buffer.close()
+            # read file in chunks to save memory in case of big files
+            chunk_size = 1024 * 1024  # 1 Megabyte at a time
 
-        return md5_hash.hexdigest()
+            while True:
+                chunk = buffer.read(chunk_size)
+                if not chunk:
+                    break
+                md5_hash.update(chunk)
+
+            return md5_hash.hexdigest()
 
     except Exception as e:
         return f'calc_md5()> error, {str(e)}'
@@ -1016,23 +1013,32 @@ def calc_sha256(fp=None, buffer=None):
     """
     try:
         if fp:
-            buffer = open(fp, 'rb')
+            with open(fp, 'rb') as buffer:
+                sha256_hash = hashlib.sha256()
 
-        sha256_hash = hashlib.sha256()
+                # read file in chunks to save memory in case of big files
+                chunk_size = 1024 * 1024  # 1 Megabyte at a time
 
-        # read file in chunks to save memory in case of big files
-        chunk_size = 1024 * 1024  # 1 Megabyte at a time
+                while True:
+                    chunk = buffer.read(chunk_size)
+                    if not chunk:
+                        break
+                    sha256_hash.update(chunk)
 
-        while True:
-            chunk = buffer.read(chunk_size)
-            if not chunk:
-                break
-            sha256_hash.update(chunk)
+                return sha256_hash.hexdigest()
+        else:
+            sha256_hash = hashlib.sha256()
 
-        if fp:
-            buffer.close()
+            # read file in chunks to save memory in case of big files
+            chunk_size = 1024 * 1024  # 1 Megabyte at a time
 
-        return sha256_hash.hexdigest()
+            while True:
+                chunk = buffer.read(chunk_size)
+                if not chunk:
+                    break
+                sha256_hash.update(chunk)
+
+            return sha256_hash.hexdigest()
 
     except Exception as e:
         return f'calc_sha256()> error, {str(e)}'
@@ -1054,25 +1060,36 @@ def calc_md5_sha256(fp=None, buffer=None):
     """
     try:
         if fp:
-            buffer = open(fp, 'rb')
+            with open(fp, 'rb') as buffer:
+                md5_hash = hashlib.md5()
+                sha256_hash = hashlib.sha256()
 
-        md5_hash = hashlib.md5()
-        sha256_hash = hashlib.sha256()
+                # read file in chunks to save memory in case of big files
+                chunk_size = 1024 * 1024  # 1 Megabyte at a time
 
-        # read file in chunks to save memory in case of big files
-        chunk_size = 1024 * 1024  # 1 Megabyte at a time
+                while True:
+                    chunk = buffer.read(chunk_size)
+                    if not chunk:
+                        break
+                    md5_hash.update(chunk)
+                    sha256_hash.update(chunk)
 
-        while True:
-            chunk = buffer.read(chunk_size)
-            if not chunk:
-                break
-            md5_hash.update(chunk)
-            sha256_hash.update(chunk)
+                return md5_hash.hexdigest(), sha256_hash.hexdigest()
+        else:
+            md5_hash = hashlib.md5()
+            sha256_hash = hashlib.sha256()
 
-        if fp:
-            buffer.close()
+            # read file in chunks to save memory in case of big files
+            chunk_size = 1024 * 1024  # 1 Megabyte at a time
 
-        return md5_hash.hexdigest(), sha256_hash.hexdigest()
+            while True:
+                chunk = buffer.read(chunk_size)
+                if not chunk:
+                    break
+                md5_hash.update(chunk)
+                sha256_hash.update(chunk)
+
+            return md5_hash.hexdigest(), sha256_hash.hexdigest()
 
     except Exception as e:
         return f'calc_md5_sha256()> error, {str(e)}'
@@ -1167,10 +1184,8 @@ def generate_unique_name(*args, prefix='', suffix=''):
 
     name = ''.join([str(x) for x in args])
 
-    try:
+    with contextlib.suppress(BaseException):
         name = get_md5(name.encode())
-    except:
-        pass
 
     return prefix + name + suffix
 
@@ -1204,10 +1219,7 @@ def parse_urls(text):
 def get_pkg_path(pkg_name):
     """get package installation path without importing"""
     spec = find_spec(pkg_name)
-    if spec:
-        pkg_path = os.path.dirname(spec.origin)
-    else:
-        pkg_path = None
+    pkg_path = os.path.dirname(spec.origin) if spec else None
     return pkg_path
 
 
@@ -1275,7 +1287,7 @@ def get_pkg_version(pkg):
                 text = f.read()
                 match = re.search(rb'\d+\.\d+\.\d+', text)
                 version = match.group().decode('utf-8')
-        except:
+        except Exception:
             pass
 
     if not version:
@@ -1289,7 +1301,7 @@ def get_pkg_version(pkg):
                 if match:
                     version = match.groups()[0]
                     break
-        except:
+        except Exception:
             pass
 
     return version
@@ -1371,7 +1383,7 @@ def get_media_duration(seconds):
         seconds = int(seconds)
         conversion = datetime.timedelta(seconds=seconds)
         result = str(conversion)
-    except:
+    except Exception:
         result = ''
 
     return result
@@ -1396,7 +1408,7 @@ def check_write_permission(target_folder, create_dirs=True):
 
         os.unlink(fp)
         success = True
-    except:
+    except Exception:
         success = False
 
     return success

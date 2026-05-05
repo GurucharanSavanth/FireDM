@@ -83,9 +83,10 @@ later_icon = b'iVBORw0KGgoAAAANSUhEUgAAAF8AAAAkCAYAAADvqeb3AAAABHNCSVQICAgIfAhki
 
 
 if __name__ == '__main__':
-	icons = [x for x in globals().keys() if x.lower().endswith('icon')]
-	import awesometkinter as atk
+	icons = [x for x in globals() if x.lower().endswith('icon')]
 	import tkinter as tk
+
+	import awesometkinter as atk
 	root = tk.Tk()
 	for name in icons:
 		img = atk.create_image(b64=globals()[name])

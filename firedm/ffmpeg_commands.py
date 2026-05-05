@@ -16,7 +16,6 @@ The callers (`video.merge_video_audio`, `video.post_process_hls`,
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
 
 
 def _quote(value: str) -> str:

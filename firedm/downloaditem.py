@@ -10,19 +10,26 @@
 # Download Item Class
 
 import logging
-import os
 import mimetypes
+import os
 import time
 from collections import deque
-from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urljoin, unquote, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
-from .utils import (validate_file_name, get_headers, translate_server_code, log, delete_file, delete_folder, save_json,
-                    load_json, get_range_list)
 from . import config
 from .config import MediaType
+from .utils import (
+    delete_file,
+    delete_folder,
+    get_headers,
+    get_range_list,
+    load_json,
+    log,
+    save_json,
+    translate_server_code,
+    validate_file_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +65,7 @@ class Segment:
     def current_size(self):
         try:
             size = os.path.getsize(self.name)
-        except:
+        except Exception:
             size = 0
         return size
 
@@ -362,10 +369,7 @@ class DownloadItem:
 
         # make progress 99% if not completed
         if p >= 100:
-            if not self.status == config.Status.completed:
-                p = 99
-            else:
-                p = 100
+            p = 99 if self.status != config.Status.completed else 100
 
         return p
 
@@ -376,7 +380,7 @@ class DownloadItem:
         try:
             if self.status == config.Status.downloading:
                 ret = int((self.total_size - self.downloaded) / self.speed)
-        except:
+        except Exception:
             pass
 
         return ret
@@ -546,7 +550,7 @@ class DownloadItem:
                     match = [x for x in content if 'filename' in x.lower()]
 
                 name = match[0].split('=')[1].strip('"')
-            except:
+            except Exception:
                 pass
 
         if not name:
@@ -625,11 +629,8 @@ class DownloadItem:
 
         else:
             # general files or video files with known sizes and resumable
-            if self.resumable and self.size:
-                # get list of ranges i.e. [[0, 100], [101, 2000], ... ]
-                range_list = get_range_list(self.size, config.SEGMENT_SIZE)
-            else:
-                range_list = [None]  # add None in a list to make one segment with range=None
+            # get list of ranges i.e. [[0, 100], [101, 2000], ... ], or [None] for single segment
+            range_list = get_range_list(self.size, config.SEGMENT_SIZE) if self.resumable and self.size else [None]
 
             _segments = [
                 Segment(name=os.path.join(self.temp_folder, str(i)), num=i, range=x,
@@ -724,13 +725,13 @@ class DownloadItem:
                     downloaded += size_on_disk
                     if size_on_disk > 0 and size_on_disk == item.get('size'):
                         item['downloaded'] = True
-                except:
+                except Exception:
                     continue
 
             # for dynamic made segments will build new segments from progress info
             if self.size and self.resumable and not self.fragments and 'hls' not in self.subtype_list:
                 self.segments.clear()
-                for i, item in enumerate(progress_info):
+                for _i, item in enumerate(progress_info):
                     try:
                         seg = Segment()
                         seg.__dict__.update(item)
@@ -744,13 +745,13 @@ class DownloadItem:
                             seg.url = self.eff_url
 
                         self.segments.append(seg)
-                    except:
+                    except Exception:
                         pass
                 log('load_progress_info()> rebuild segments from previous download for:', self.name)
 
             # for fixed segments will update segments list only
             elif self.segments:
-                for seg, item in zip(self.segments, progress_info):
+                for seg, item in zip(self.segments, progress_info, strict=False):
                     if seg.name == item.get('name'):
                         seg.__dict__.update(item)
                 log('load_progress_info()> updated current segments for:', self.name)
@@ -775,7 +776,7 @@ class DownloadItem:
         def _get_progress(fp, full_size):
             try:
                 current_size = os.path.getsize(fp)
-            except:
+            except Exception:
                 current_size = 0
 
             if current_size == 0 or full_size == 0:

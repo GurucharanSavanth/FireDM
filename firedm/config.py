@@ -9,19 +9,18 @@ Based on "LibCurl", "yt_dlp", and Tkinter.
 from __future__ import annotations
 
 import logging
-import os
 import platform
 import sys
 from pathlib import Path
 from queue import Queue
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .version import __version__
 
 logger = logging.getLogger(__name__)
 
 # Settings parameters to be saved on disk
-settings_keys: List[str] = [
+settings_keys: list[str] = [
     'active_video_extractor', 'auto_rename', 'autoscroll_download_tab', 'check_for_update', 'checksum', 'current_theme',
     'custom_user_agent', 'disable_log_popups', 'ditem_show_top', 'download_folder', 'download_thumbnail',
     'enable_proxy', 'enable_systray', 'gui_font', 'ibus_workaround', 'ignore_ssl_cert',
@@ -81,14 +80,14 @@ else:
 sys.path.insert(0, str(current_directory.parent))
 sys.path.insert(0, str(current_directory))
 
-sett_folder: Optional[Path] = None
-global_sett_folder: Optional[Path] = None
+sett_folder: Path | None = None
+global_sett_folder: Path | None = None
 download_folder: Path = Path.home() / 'Downloads'
-recent_folders: List[Path] = []
+recent_folders: list[Path] = []
 
 auto_rename: bool = False  # Auto rename file if one exists at download folder
 checksum: bool = False  # Calculate checksums for completed files (MD5, SHA256)
-playlist_autonum_options: Dict[str, bool] = {
+playlist_autonum_options: dict[str, bool] = {
     'enable': True,
     'reverse': False,
     'zeropadding': True,
@@ -113,15 +112,15 @@ password: str = ''
 # Video Options
 # youtube-dl abort flag, used by decorated YoutubeDl.urlopen()
 ytdl_abort: bool = False
-video_extractors_list: List[str] = ['youtube_dl', 'yt_dlp']
+video_extractors_list: list[str] = ['youtube_dl', 'yt_dlp']
 active_video_extractor: str = 'yt_dlp'
 
 ffmpeg_actual_path: str = ''
 ffmpeg_version: str = ''
-ffmpeg_download_folder: Optional[Path] = sett_folder
+ffmpeg_download_folder: Path | None = sett_folder
 
 # Media presets
-media_presets: Dict[str, str] = {
+media_presets: dict[str, str] = {
     'video_ext': 'mp4',
     'video_quality': 'best',
     'dash_audio': 'best',
@@ -135,12 +134,12 @@ media_presets: Dict[str, str] = {
 allow_user_extractors: bool = False
 
 # Plugin system — all plugins default OFF; user enables via GUI toggle
-plugin_states: Dict[str, bool] = {}  # {plugin_name: bool}, persisted in setting.cfg
+plugin_states: dict[str, bool] = {}  # {plugin_name: bool}, persisted in setting.cfg
 plugin_dir: str = ''  # Path to custom user plugin directory
 allow_user_plugins: bool = False  # SECURITY: loading user plugins = importlib exec
 
 # Video qualities
-vq: Dict[int, str] = {
+vq: dict[int, str] = {
     4320: '4320p-8K',
     2160: '2160p-4K',
     1440: '1440p-HD',
@@ -151,12 +150,12 @@ vq: Dict[int, str] = {
     240: '240p',
     144: '144p',
 }
-standard_video_qualities: List[int] = list(vq.keys())
-video_quality_choices: List[str] = ['best'] + list(vq.values()) + ['lowest']
-video_ext_choices: Tuple[str, ...] = ('mp4', 'webm', '3gp')
-dash_audio_choices: Tuple[str, ...] = ('best', 'lowest')
-audio_ext_choices: Tuple[str, ...] = ('mp3', 'aac', 'wav', 'm4a', 'opus', 'flac', 'ogg', 'webm')
-audio_quality_choices: Tuple[str, ...] = ('best', 'lowest')
+standard_video_qualities: list[int] = list(vq.keys())
+video_quality_choices: list[str] = ['best'] + list(vq.values()) + ['lowest']
+video_ext_choices: tuple[str, ...] = ('mp4', 'webm', '3gp')
+dash_audio_choices: tuple[str, ...] = ('best', 'lowest')
+audio_ext_choices: tuple[str, ...] = ('mp3', 'aac', 'wav', 'm4a', 'opus', 'flac', 'ogg', 'webm')
+audio_quality_choices: tuple[str, ...] = ('best', 'lowest')
 
 # Workarounds
 ibus_workaround: bool = False  # Issue #256
@@ -164,8 +163,8 @@ ignore_ssl_cert: bool = False  # Ignore SSL certificate validation
 
 # Random user agent will be used later if no custom user agent set
 DEFAULT_USER_AGENT: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3721.3'
-custom_user_agent: Optional[str] = None
-http_headers: Dict[str, str] = {
+custom_user_agent: str | None = None
+http_headers: dict[str, str] = {
     'User-Agent': custom_user_agent or DEFAULT_USER_AGENT,
     'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -191,12 +190,12 @@ disable_update_feature: bool = False
 
 check_for_update: bool = not disable_update_feature
 update_frequency: int = 7  # Days
-last_update_check: Optional[Tuple[int, int, int]] = None  # Date format (year, month, day)
+last_update_check: tuple[int, int, int] | None = None  # Date format (year, month, day)
 updater_version: str = ''  # Application version that did last update check
 
-youtube_dl_version: Optional[str] = None
-yt_dlp_version: Optional[str] = None
-atk_version: Optional[str] = None  # awesometkinter
+youtube_dl_version: str | None = None
+yt_dlp_version: str | None = None
+atk_version: str | None = None  # awesometkinter
 
 # Downloader Options
 refresh_url_retries: int = 1  # Retries to refresh expired URL, zero to disable
@@ -213,14 +212,14 @@ log_level: int = 2  # standard=1, verbose=2, debug=3
 
 # Log callbacks executed when calling log function
 # Callback and popup accept 3 positional args: log_callback(start, text, end)
-log_callbacks: List[Any] = []
-log_popup_callback: Optional[Any] = None
+log_callbacks: list[Any] = []
+log_popup_callback: Any | None = None
 test_mode: bool = False
 
 # GUI Options
 DEFAULT_THEME: str = 'Orange_Black'
 current_theme: str = DEFAULT_THEME
-gui_font: Dict[str, Any] = {}
+gui_font: dict[str, Any] = {}
 gui_font_size_default: int = 10
 gui_font_size_range: range = range(6, 26)
 
@@ -232,11 +231,11 @@ autoscroll_download_tab: bool = False
 ditem_show_top: bool = True
 
 # Systray disabled by default (doesn't work on most OS except Windows)
-enable_systray: bool = True if operating_system == 'Windows' else False
+enable_systray: bool = operating_system == 'Windows'
 minimize_to_systray: bool = False
 
-DEFAULT_WINDOW_SIZE: Tuple[int, int] = (925, 500)  # width, height in pixels
-window_size: Tuple[int, int] = DEFAULT_WINDOW_SIZE
+DEFAULT_WINDOW_SIZE: tuple[int, int] = (925, 500)  # width, height in pixels
+window_size: tuple[int, int] = DEFAULT_WINDOW_SIZE
 window_maximized: bool = False
 force_window_maximize: bool = False
 
@@ -245,7 +244,7 @@ COMPACT: str = 'Compact'
 MIX: str = 'Mix'
 DEFAULT_VIEW_MODE: str = MIX
 view_mode: str = DEFAULT_VIEW_MODE
-view_mode_choices: Tuple[str, ...] = (COMPACT, BULK, MIX)
+view_mode_choices: tuple[str, ...] = (COMPACT, BULK, MIX)
 view_filter: str = 'ALL'  # Show all
 d_preview: bool = False  # Preview for download items
 
@@ -268,11 +267,11 @@ class Status:
     error: str = 'Failed'
     scheduled: str = 'Scheduled'
     refreshing_url: str = 'Refreshing url'
-    active_states: Tuple[str, ...] = (downloading, processing, refreshing_url)
-    all_states: Tuple[str, ...] = (downloading, cancelled, completed, pending, processing, error, scheduled, refreshing_url)
+    active_states: tuple[str, ...] = (downloading, processing, refreshing_url)
+    all_states: tuple[str, ...] = (downloading, cancelled, completed, pending, processing, error, scheduled, refreshing_url)
 
 
-view_filter_map: Dict[str, Tuple[str, ...]] = {
+view_filter_map: dict[str, tuple[str, ...]] = {
     'ALL': Status.all_states,
     'Selected': (),
     'Active': Status.active_states,
@@ -295,7 +294,7 @@ class MediaType:
 # Popup windows for user responses
 disable_log_popups: bool = False
 
-popups: Dict[int, Dict[str, Any]] = {
+popups: dict[int, dict[str, Any]] = {
     1: {
         'tag': 'html contents',
         'description': 'Show "Contents might be an html web page warning".',
@@ -355,13 +354,13 @@ popups: Dict[int, Dict[str, Any]] = {
     },
 }
 
-for k in popups.keys():
+for k in popups:
     var_name = f'popup_{k}'
-    globals()[var_name] = True if k in (2, 4, 6, 7) else False
+    globals()[var_name] = k in (2, 4, 6, 7)
     settings_keys.append(var_name)
 
 
-def get_popup(k: int) -> Dict[str, Any]:
+def get_popup(k: int) -> dict[str, Any]:
     """Get popup configuration by key.
 
     Args:

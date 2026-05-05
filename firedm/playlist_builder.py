@@ -11,12 +11,13 @@ preserving the observer/GUI wiring that only the controller knows about.
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception
 from .playlist_entry import normalize_entry
-
 
 VideoFactory = Callable[[str, dict[str, Any]], Any]
 
@@ -162,8 +163,6 @@ def _build_single_entry(
         result.errors.append(f"single: {type(e).__name__}: {e}")
         pipeline_exception(PipelineStage.PLAYLIST_PARSE, e, url=url, kind="single")
         return
-    try:
+    with contextlib.suppress(Exception):
         vid.processed = True
-    except Exception:
-        pass
     result.videos.append(vid)

@@ -11,20 +11,21 @@
 """
 import datetime
 import json
-import re
-import time
-import pycurl
-import tkinter as tk
-from tkinter import font as tkfont
-import awesometkinter as atk
-from tkinter import ttk, filedialog, colorchooser
-from awesometkinter.version import __version__ as atk_version
-import PIL
-from queue import Queue
 import os
-import sys
-import subprocess
+import re
 import signal
+import subprocess
+import sys
+import time
+import tkinter as tk
+from queue import Queue
+from tkinter import colorchooser, filedialog, ttk
+from tkinter import font as tkfont
+
+import awesometkinter as atk
+import PIL
+import pycurl
+from awesometkinter.version import __version__ as atk_version
 
 if __package__ is None:
     path = os.path.realpath(os.path.abspath(__file__))
@@ -32,28 +33,96 @@ if __package__ is None:
     sys.path.insert(0, os.path.dirname(os.path.dirname(path)))
 
     __package__ = 'firedm'
-    import firedm
 
-from .view import IView
-from .controller import Controller, set_option, get_option, log_runtime_info
-from .utils import *
-from . import config
-from .config import BULK, COMPACT, MIX
-from . import iconsbase64
-from .iconsbase64 import *
-from .systray import SysTray
+import contextlib
+
+from . import config, iconsbase64
 from .about import about_notes
-from .themes import *
+from .config import BULK, COMPACT, MIX
+from .controller import Controller, get_option, log_runtime_info, set_option
+from .iconsbase64 import (
+    APP_ICON,
+    done_icon,
+    download_icon,
+    filter_icon,
+    home_icon,
+    hourglass_icon,
+    log_icon,
+    refresh_icon,
+    select_icon,
+    sett_icon,
+    view_icon,
+    wmap,
+)
+from .systray import SysTray
+from .themes import (
+    BTN_ABG,
+    BTN_AFG,
+    BTN_BG,
+    BTN_FG,
+    BTN_HBG,
+    ENTRY_BD_COLOR,
+    HDG_BG,
+    HDG_FG,
+    MAIN_BG,
+    MAIN_FG,
+    PBAR_BG,
+    PBAR_FG,
+    PBAR_TXT,
+    RCM_ABG,
+    RCM_AFG,
+    RCM_BG,
+    RCM_FG,
+    SBAR_BG,
+    SBAR_FG,
+    SEL_BG,
+    SEL_FG,
+    SF_BG,
+    SF_BTN_BG,
+    SF_CHKMARK,
+    SF_FG,
+    THUMBNAIL_BD,
+    THUMBNAIL_BG,
+    THUMBNAIL_FG,
+    builtin_themes,
+    calculate_missing_theme_keys,
+    strip_theme,
+    theme_map,
+)
+from .utils import (
+    auto_rename,
+    delete_file,
+    format_bytes,
+    format_seconds,
+    get_media_duration,
+    ignore_errors,
+    load_json,
+    log,
+    natural_sort,
+    open_folder,
+    open_webpage,
+    parse_bytes,
+    parse_urls,
+    run_command,
+    run_thread,
+    save_json,
+    threaded,
+)
+from .view import IView
+
 
 # ignore bidi support on non-Linux operating systems
-add_bidi_support = lambda widget, *args, **kwargs: widget
-render_text = lambda text, *args, **kwargs: text
-derender_text = lambda text, *args, **kwargs: text
+def add_bidi_support(widget, *args, **kwargs):
+    return widget
+def render_text(text, *args, **kwargs):
+    return text
+def derender_text(text, *args, **kwargs):
+    return text
 
 # bidi support on linux
 if config.operating_system == 'Linux':
     try:
-        from awesometkinter.bidirender import add_bidi_support, render_text, derender_text
+        from awesometkinter.bidirender import add_bidi_support, derender_text, render_text
     except Exception as e:
         print('Bidi support error:', e)
 
@@ -85,7 +154,7 @@ def create_imgs():
               'clear_icon', 'paste_icon', 'downloadbtn_icon', 'later_icon'):
         v = iconsbase64.__dict__[k]
 
-        img = atk.create_image(b64=v, color=color, size=sizes.get(k, None))
+        img = atk.create_image(b64=v, color=color, size=sizes.get(k))
         imgs[k] = img
 
     imgs['blinker_icon'] = atk.create_image(b64=download_icon, color=BTN_BG, size=12)
@@ -154,7 +223,7 @@ def url_watchdog(root):
         try:
             if config.monitor_clipboard:
                 new_data = root.clipboard_get()
-        except:
+        except Exception:
             new_data = ''
 
         # url processing
@@ -374,7 +443,7 @@ class Button(tk.Button):
     def __init__(self, parent, transparent=False, **kwargs):
         options = {}
         parent_bg = atk.get_widget_attribute(parent, 'background')
-        image = kwargs.get('image', None)
+        image = kwargs.get('image')
         options['cursor'] = 'hand2'
 
         if image or transparent:
@@ -878,7 +947,7 @@ class SideFrame(tk.Frame):
 
             selected_tab.grid(row=1, column=2, sticky='ewns')
             self.activate_checkmark(tab_name)
-        except:
+        except Exception:
             pass
 
     def on_button_selection(self, *args):
@@ -1034,7 +1103,7 @@ class MediaListBox(tk.Frame):
         if idx is None:
             try:
                 return self.listbox.curselection()[0]
-            except:
+            except Exception:
                 pass
         else:
             # clear selection first
@@ -1222,7 +1291,7 @@ class Browse(tk.Frame):
                 return
 
             config.recent_folders.remove(value)
-        except:
+        except Exception:
             pass
 
         # add current folder value at the beginning of the list and limit list size to 10 items
@@ -1360,14 +1429,14 @@ class FileProperties(ttk.Frame):
         'type': 'video', 'subtype_list': ['dash', 'fragmented'], 'resumable': True, 'total_size': 100000}
 
         """
-        title = kwargs.get('title', None)
-        extension = kwargs.get('extension', None)
-        size = kwargs.get('total_size', None)
-        folder = kwargs.get('folder', None)
+        title = kwargs.get('title')
+        extension = kwargs.get('extension')
+        size = kwargs.get('total_size')
+        folder = kwargs.get('folder')
         type_ = kwargs.get('type', '')
         subtype_list = kwargs.get('subtype_list', '')
-        resumable = kwargs.get('resumable', None)
-        duration = kwargs.get('duration', None)
+        resumable = kwargs.get('resumable')
+        duration = kwargs.get('duration')
         duration_string = get_media_duration(duration)
 
         if title:
@@ -1627,7 +1696,7 @@ class DItem(tk.Frame):
 
                         if recursive:
                             change_colors(child, fg, bg, children, recursive)
-            except:
+            except Exception:
                 pass
 
         change_colors(self, selection_fg, selection_bg)
@@ -1645,8 +1714,8 @@ class DItem(tk.Frame):
                 w = getattr(self, name, None)
                 if w:
                     change_colors(w, selection_fg, selection_bg,
-                                  children=True if name in ('bar', 'bar_fr') else False,
-                                  recursive=True if name == 'bar' else False,
+                                  children=name in ('bar', 'bar_fr'),
+                                  recursive=name == 'bar',
                                   execludes=('TProgressbar',) if name == 'bar_fr' else None)
 
         if callable(self.on_toggle_callback):
@@ -1728,7 +1797,7 @@ class DItem(tk.Frame):
             self.abar = tk.IntVar()
             self.mbar = tk.IntVar()
 
-            for lbl, var in zip(('Video: ', '    Audio: ', '    Output File: '), (self.vbar, self.abar, self.mbar)):
+            for lbl, var in zip(('Video: ', '    Audio: ', '    Output File: '), (self.vbar, self.abar, self.mbar), strict=False):
                 tk.Label(self.bar_fr, text=lbl, bg=self.bg, fg=self.fg).pack(side='left')
                 ttk.Progressbar(self.bar_fr, orient=tk.HORIZONTAL, style=self.bottom_bars_style, length=20,
                                 variable=var).pack(side='left', expand=True, fill='x')
@@ -1839,10 +1908,8 @@ class DItem(tk.Frame):
         else:
             status_img = self.blank_img
 
-        try:
+        with contextlib.suppress(BaseException):
             self.status_icon.config(image=status_img)
-        except:
-            pass
 
         # toggle play/pause icons
         try:
@@ -1851,7 +1918,7 @@ class DItem(tk.Frame):
             else:
                 img = imgs['play_icon']
             self.play_button.config(image=img)
-        except:
+        except Exception:
             pass
 
         if self.mode == COMPACT:
@@ -1875,9 +1942,7 @@ class DItem(tk.Frame):
 
     def dynamic_show_hide(self):
         """show / hide item based on global view filter"""
-        if config.view_filter.lower() == 'selected' and self.selected:
-            self.show()
-        elif self.status in config.view_filter_map.get(config.view_filter, ()):
+        if config.view_filter.lower() == 'selected' and self.selected or self.status in config.view_filter_map.get(config.view_filter, ()):
             self.show()
         else:
             self.hide()
@@ -1952,10 +2017,8 @@ class DItem(tk.Frame):
         if name:
             self.name = name
             title, ext = os.path.splitext(name)
-            try:
+            with contextlib.suppress(BaseException):
                 self.name_lbl.config(text=render_text(title) + ext)
-            except:
-                pass
 
         if downloaded is not None:
             self.size = format_bytes(downloaded, percision=1, sep='')
@@ -1976,7 +2039,7 @@ class DItem(tk.Frame):
             try:
                 self.progress = f'{progress}%'
                 self.bar.set(progress)
-            except:
+            except Exception:
                 pass
 
         if extension:
@@ -1986,14 +2049,14 @@ class DItem(tk.Frame):
                 # negative font size will force character size in pixels
                 f = f'any {int(- self.thumbnail_width * 0.8 // len(ext))} bold'
                 self.thumbnail_label.config(text=ext, font=f)
-            except:
+            except Exception:
                 pass
 
         if thumbnail:
             try:
                 self.thumbnail_img = atk.create_image(b64=thumbnail, size=self.thumbnail_width)
                 self.thumbnail_label.config(image=self.thumbnail_img, text='')
-            except:
+            except Exception:
                 pass
 
         if 'errors' in kwargs:
@@ -2006,10 +2069,9 @@ class DItem(tk.Frame):
         if total_parts:
             self.total_parts = total_parts
 
-        if remaining_parts:
-            if self.total_parts:
-                completed = self.total_parts - remaining_parts
-                self.completed_parts = f'- Done: {completed} of {self.total_parts}'
+        if remaining_parts and self.total_parts:
+            completed = self.total_parts - remaining_parts
+            self.completed_parts = f'- Done: {completed} of {self.total_parts}'
 
         if status:
             self.status = status
@@ -2021,27 +2083,22 @@ class DItem(tk.Frame):
 
             self.mark_as_failed(status == config.Status.error)
 
-            try:
+            with contextlib.suppress(BaseException):
                 self.dynamic_view()
-            except:
-                pass
 
             self.dynamic_show_hide()
 
             self.switch_view(config.view_mode)
             self.update_rcm()
 
-        if sched:
-            if status == config.Status.scheduled:
-                self.sched = f'@{sched}'
+        if sched and status == config.Status.scheduled:
+            self.sched = f'@{sched}'
 
         if type:
             self.media_type = type
             if type == 'video' and self.status != config.Status.completed:
-                try:
+                with contextlib.suppress(BaseException):
                     self.bar_fr.grid()
-                except:
-                    pass
 
         if isinstance(subtype_list, list):
             self.media_subtype = ' '.join(subtype_list)
@@ -2053,28 +2110,20 @@ class DItem(tk.Frame):
 
         # bottom progress bars
         if video_progress:
-            try:
+            with contextlib.suppress(BaseException):
                 self.vbar.set(video_progress)
-            except:
-                pass
 
         if audio_progress:
-            try:
+            with contextlib.suppress(BaseException):
                 self.abar.set(audio_progress)
-            except:
-                pass
 
         if merge_progress:
-            try:
+            with contextlib.suppress(BaseException):
                 self.mbar.set(merge_progress)
-            except:
-                pass
 
         if segments_progress:
-            try:
+            with contextlib.suppress(BaseException):
                 self.segment_bar.ubdate_bars(segments_progress)
-            except:
-                pass
 
         self.display_info()
 
@@ -2091,7 +2140,7 @@ class DItem(tk.Frame):
                 # off blinker
                 self.blinker.config(image=self.blank_img)
                 self.blinker.on = False
-        except:
+        except Exception:
             pass
 
 
@@ -2190,7 +2239,7 @@ class LabeledEntryOption(tk.Frame):
 
             if callable(self.callback):
                 self.callback()
-        except:
+        except Exception:
             pass
 
     def set(self, text):
@@ -2200,7 +2249,7 @@ class LabeledEntryOption(tk.Frame):
                 text = self.set_text_validator(text)
 
             self.var.set(text)
-        except:
+        except Exception:
             pass
 
     def get(self):
@@ -2255,11 +2304,7 @@ class CheckEntryOption(tk.Frame):
         # Load previous values -----------------------------------------------------------------------------------------
         text = get_option(entry_key, '')
 
-        if check_key is None:
-            checked = True if text else False
-
-        else:
-            checked = get_option(check_key, False)
+        checked = (bool(text)) if check_key is None else get_option(check_key, False)
 
         self.chkvar.set(checked)
 
@@ -2270,10 +2315,7 @@ class CheckEntryOption(tk.Frame):
     def update_sett(self, *args):
         try:
             checked = self.chkvar.get()
-            if checked:
-                text = self.get()
-            else:
-                text = self.entry_disabled_value
+            text = self.get() if checked else self.entry_disabled_value
 
             set_option(**{self.entry_key: text})
 
@@ -2282,7 +2324,7 @@ class CheckEntryOption(tk.Frame):
 
             if callable(self.callback):
                 self.callback()
-        except:
+        except Exception:
             pass
 
     def set(self, text):
@@ -2292,7 +2334,7 @@ class CheckEntryOption(tk.Frame):
                 text = self.set_text_validator(text)
 
             self.entry_var.set(text)
-        except:
+        except Exception:
             pass
 
     def get(self):
@@ -2432,10 +2474,7 @@ class MediaPresets(tk.Frame):
         # subtitles
         lang = self.sub_lang.get()
         ext = self.sub_ext.get()
-        if self.sub_var.get() and lang and ext:
-            subtitles = {lang: ext}
-        else:
-            subtitles = None
+        subtitles = {lang: ext} if self.sub_var.get() and lang and ext else None
         return subtitles
 
 
@@ -2906,7 +2945,7 @@ class BatchWindow(tk.Toplevel):
                 urls = parse_urls(text)
                 for url in urls:
                     self.add_url(url)
-        except:
+        except Exception:
             pass
 
     def create_widgets(self):
@@ -3048,8 +3087,7 @@ class DatePicker(tk.Toplevel):
             if day > days_in_month:
                 self.day_combo.set(days_in_month)
 
-        c = 0
-        for key, item in self.fields.items():
+        for c, (key, item) in enumerate(self.fields.items()):
             tk.Label(middle_frame, text=key, bg=MAIN_BG, fg=MAIN_FG).grid(row=0, column=c, padx=5, sticky='w')
             cb = Combobox(middle_frame, values=item['values'], selection=item['selection'], width=5)
             cb.grid(row=1, column=c, padx=(5, 10), sticky='w')
@@ -3058,8 +3096,6 @@ class DatePicker(tk.Toplevel):
             # get day combo box reference
             if key == 'Day':
                 self.day_combo = cb
-
-            c += 1
 
         bottom_frame = tk.Frame(main_frame, bg=MAIN_BG)
         Button(bottom_frame, text='Cancel', command=self.close).pack(side='right', padx=5)
@@ -3151,7 +3187,7 @@ class MainWindow(IView):
         # assign window size
         try:
             self.width, self.height = config.window_size
-        except:
+        except Exception:
             self.width, self.height = config.DEFAULT_WINDOW_SIZE
 
         center_window(self.root, width=self.width, height=self.height)
@@ -3224,7 +3260,8 @@ class MainWindow(IView):
         # hope they fix this bug as soon as possible
         p = subprocess.Popen(['ps', '-A'], stdout=subprocess.PIPE, universal_newlines=True)
         output, error = p.communicate()
-        if error: return
+        if error:
+            return
 
         for line in output.splitlines():
             if 'ibus-x11' in line:
@@ -3403,7 +3440,7 @@ class MainWindow(IView):
 
     def del_theme(self):
         sel = self.themes_menu.get()
-        if sel not in builtin_themes.keys():
+        if sel not in builtin_themes:
             all_themes.pop(sel)
             self.update_theme_menu()
         else:
@@ -4182,7 +4219,7 @@ class MainWindow(IView):
         try:
             _ = int(sl)  # will succeed if it has no string
             sl = f'{sl} KB'
-        except:
+        except Exception:
             pass
 
         sl = parse_bytes(sl)
@@ -4464,7 +4501,7 @@ class MainWindow(IView):
     def switch_view(self, mode):
         config.view_mode = mode
 
-        for uid, item in self.d_items.items():
+        for _uid, item in self.d_items.items():
             item.switch_view(mode=mode)
         self.update_stat_lbl()
         self.d_tab.scrolltotop()
@@ -4613,7 +4650,7 @@ class MainWindow(IView):
                 self.resume_download(uid)
 
     def stop_all(self):
-        for uid, item in self.d_items.items():
+        for uid, _item in self.d_items.items():
             self.stop_download(uid)
     # endregion
 
@@ -4647,10 +4684,10 @@ class MainWindow(IView):
         """real update view"""
         command = kwargs.get('command')
         uid = kwargs.get('uid')
-        active = kwargs.get('active', None)
-        video_idx = kwargs.get('video_idx', None)
-        stream_idx = kwargs.get('stream_idx', None)
-        status = kwargs.get('status', None)
+        active = kwargs.get('active')
+        video_idx = kwargs.get('video_idx')
+        stream_idx = kwargs.get('stream_idx')
+        status = kwargs.get('status')
 
         if status:
             self.root.after(100, self.update_stat_lbl)
@@ -4668,7 +4705,7 @@ class MainWindow(IView):
         # load previous download items in d_tab, needed at startup
         if command == 'd_list':
             d_list = kwargs.get('d_list')
-            for i, item in enumerate(d_list):
+            for _i, item in enumerate(d_list):
                 # self.root.after(1000 + i * 5, lambda k=item: self.create_ditem(**k, focus=False))
                 self.create_ditem(**item, focus=False)
             self.root.update_idletasks()
@@ -4730,7 +4767,7 @@ class MainWindow(IView):
                 self.file_properties.update(**kwargs)
 
                 # thumbnail
-                img_base64 = kwargs.get('thumbnail', None)
+                img_base64 = kwargs.get('thumbnail')
                 if img_base64:
                     self.thumbnail.show(b64=img_base64)
 
@@ -4938,10 +4975,8 @@ class MainWindow(IView):
             sequence (str): an event sequence accepted by tkinter, e.g. '<<myVirtualEvent>>' or '<1>', note double marks
             for virtual event names
         """
-        try:
+        with contextlib.suppress(BaseException):
             self.root.event_generate(sequence, when='tail')
-        except:
-            pass
 
     def hide(self):
         self.root.withdraw()
@@ -5130,14 +5165,14 @@ class MainWindow(IView):
         try:
             self.root.clipboard_clear()
             self.root.clipboard_append(str(value))
-        except:
+        except Exception:
             pass
 
     def paste(self):
         """get clipboard value"""
         try:
             value = self.root.clipboard_get()
-        except:
+        except Exception:
             value = ''
 
         return value
@@ -5146,10 +5181,8 @@ class MainWindow(IView):
         """custom paste text in entry widgets
         Ack: https://stackoverflow.com/a/46636970
         """
-        try:
+        with contextlib.suppress(BaseException):
             event.widget.delete("sel.first", "sel.last")
-        except:
-            pass
 
         value = self.paste().strip()
         event.widget.insert("insert", value)

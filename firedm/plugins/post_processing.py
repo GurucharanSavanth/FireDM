@@ -9,13 +9,14 @@ Runs configurable steps after a download completes:
 Each step is individually togglable via `enabled_steps`.
 Default OFF.
 """
+import contextlib
 import hashlib
 import json
 import os
 
-from .registry import PluginBase, PluginMeta, PluginRegistry
 from .. import config
 from ..utils import delete_file, log, rename_file, run_command, safe_extract_tar, safe_extract_zip
+from .registry import PluginBase, PluginMeta, PluginRegistry
 
 META = PluginMeta(
     name='post_processing',
@@ -179,7 +180,7 @@ class PostProcessingPlugin(PluginBase):
         db = {}
         if os.path.isfile(db_path):
             try:
-                with open(db_path, 'r') as f:
+                with open(db_path) as f:
                     db = json.load(f)
             except Exception:
                 db = {}
@@ -228,10 +229,8 @@ class PostProcessingPlugin(PluginBase):
             err, _ = run_command(f'"{ffmpeg}" -y -ss 00:00:01 -i "{target}" -vframes 1 "{frame}"', verbose=False)
             if not err and os.path.isfile(frame):
                 h = str(imagehash.phash(Image.open(frame)))
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(frame)
-                except Exception:
-                    pass
                 return h
         except ImportError:
             pass

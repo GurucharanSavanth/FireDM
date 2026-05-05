@@ -11,9 +11,9 @@ import os
 import random
 import shutil
 
-from .registry import PluginBase, PluginMeta, PluginRegistry
 from .. import config
 from ..utils import log
+from .registry import PluginBase, PluginMeta, PluginRegistry
 
 META = PluginMeta(
     name='anti_detection',

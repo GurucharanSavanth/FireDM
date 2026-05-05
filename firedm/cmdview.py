@@ -13,20 +13,18 @@
 
 """
 
-import os
-import sys
 import shutil
+import sys
+from collections import namedtuple
 from queue import Queue
 from threading import Event
-from collections import namedtuple
 
 if not __package__:
     __package__ = 'firedm'
 
-from firedm.view import IView
-from firedm import utils
+from firedm import config, utils
 from firedm.utils import format_bytes, format_seconds
-from firedm import config
+from firedm.view import IView
 
 
 def write(s, end=''):
@@ -41,7 +39,7 @@ def get_terminal_size():
     """get terminal window size, return 2-tuple (width, height)"""
     try:
         size = shutil.get_terminal_size()
-    except:
+    except Exception:
         # default fallback values
         size = (100, 20)
     return terminal_size(*size)
@@ -172,7 +170,7 @@ class CmdView(IView):
 
             try:
                 self.print_progress_bar(progress, suffix=suffix, fill='=')
-            except:
+            except Exception:
                 if config.test_mode:
                     raise
 
@@ -251,7 +249,7 @@ class CmdView(IView):
                 response = options_map[int(txt)]
                 print()  # print empty line
                 break  # exit while loop if user entered a valid selection
-            except:
+            except Exception:
                 print('\n invalid entry, try again.\n')
 
         return response

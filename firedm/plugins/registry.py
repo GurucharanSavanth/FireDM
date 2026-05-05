@@ -16,8 +16,7 @@ import sys
 import textwrap
 import threading
 from collections.abc import Callable
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 from .. import config
 from ..utils import log
@@ -53,27 +52,27 @@ class PluginMeta:
         author: str,
         description: str,
         default_enabled: bool = False,
-        dependencies: Optional[List[str]] = None,
-        conflicts: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
+        conflicts: list[str] | None = None,
     ) -> None:
         self.name: str = name
         self.version: str = version
         self.author: str = author
         self.description: str = description
         self.default_enabled: bool = bool(default_enabled)
-        self.dependencies: List[str] = dependencies or []
-        self.conflicts: List[str] = conflicts or []
+        self.dependencies: list[str] = dependencies or []
+        self.conflicts: list[str] = conflicts or []
         self.enabled: bool = False
         self.loaded: bool = False
-        self.instance: Optional[PluginBase] = None
-        self.plugin_class: Optional[Type[PluginBase]] = None
+        self.instance: PluginBase | None = None
+        self.plugin_class: type[PluginBase] | None = None
         self.filepath: str = ""
 
 
 class PluginBase:
     """Base class for all plugins."""
 
-    META: Optional[PluginMeta] = None
+    META: PluginMeta | None = None
 
     def __init__(self) -> None:
         if self.META is None:
@@ -107,9 +106,9 @@ class PluginBase:
 class PluginRegistry:
     """Registry and dispatcher for plugins."""
 
-    _plugins: Dict[str, PluginMeta] = {}
-    _plugin_classes: Dict[str, Type[PluginBase]] = {}
-    _hooks: Dict[str, Dict[str, Callable[..., bool]]] = {
+    _plugins: dict[str, PluginMeta] = {}
+    _plugin_classes: dict[str, type[PluginBase]] = {}
+    _hooks: dict[str, dict[str, Callable[..., bool]]] = {
         "download_start": {},
         "segment_complete": {},
         "download_complete": {},
@@ -118,7 +117,7 @@ class PluginRegistry:
     _lock = threading.RLock()
 
     @classmethod
-    def register(cls, plugin_class: Type[PluginBase]) -> None:
+    def register(cls, plugin_class: type[PluginBase]) -> None:
         """Register a plugin class."""
         with cls._lock:
             if not inspect.isclass(plugin_class) or not issubclass(plugin_class, PluginBase):
@@ -257,7 +256,7 @@ class PluginRegistry:
         return True
 
     @classmethod
-    def scan_plugins(cls, plugin_dir: Optional[str] = None) -> None:
+    def scan_plugins(cls, plugin_dir: str | None = None) -> None:
         """Scan built-in plugins and user plugins only when explicitly allowed."""
         cls._scan_builtin_dir(plugin_dir or os.path.dirname(__file__))
 
@@ -266,7 +265,7 @@ class PluginRegistry:
             cls._scan_user_plugins(user_dir)
 
     @classmethod
-    def get_plugin_list(cls) -> List[PluginMeta]:
+    def get_plugin_list(cls) -> list[PluginMeta]:
         """Get sorted list of all registered plugins."""
         with cls._lock:
             return sorted(cls._plugins.values(), key=lambda meta: meta.name)
@@ -343,7 +342,7 @@ class PluginRegistry:
                 cls.register(obj)
 
     @staticmethod
-    def _uses_forbidden_exec(plugin_class: Type[PluginBase]) -> bool:
+    def _uses_forbidden_exec(plugin_class: type[PluginBase]) -> bool:
         """Check if plugin class uses eval/exec."""
         try:
             source = textwrap.dedent(inspect.getsource(plugin_class))

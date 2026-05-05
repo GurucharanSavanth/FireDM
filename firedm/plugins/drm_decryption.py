@@ -9,8 +9,8 @@ FairPlay decryption. The placeholder remains only so old settings that mention
 `drm_decryption` fail closed instead of importing an active decryptor.
 """
 
-from .registry import PluginBase, PluginMeta, PluginRegistry
 from ..utils import log
+from .registry import PluginBase, PluginMeta, PluginRegistry
 
 META = PluginMeta(
     name="drm_decryption",

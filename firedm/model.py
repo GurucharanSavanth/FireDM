@@ -11,9 +11,9 @@
 """
 import os
 
+from . import utils
 from .downloaditem import DownloadItem
 from .video import Video
-from . import utils
 
 
 class Observable:
@@ -45,7 +45,7 @@ class Observable:
 
         try:
             old_value = super_class.__getattribute__(self, key)
-        except:
+        except Exception:
             old_value = None
 
         # normalize folder path https://github.com/firedm/FireDM/issues/185
@@ -166,7 +166,7 @@ class ObservableVideo(Video, Observable):
         all_subtitles = {k: all_subtitles[k] for k in sorted_keys}
 
         # add 'srt' extension
-        for lang, ext_list in all_subtitles.items():
+        for _lang, ext_list in all_subtitles.items():
 
             for item in ext_list:  # item example: [{'url': 'http://x.com/s1', 'ext': 'srv1'}, {'url': 'http://x.com/s2', 'ext': 'vtt'}]
                 item.setdefault('ext', 'txt')

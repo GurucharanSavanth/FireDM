@@ -6,16 +6,16 @@
 
 import json
 import os
-import threading
 import subprocess
+import threading
 import time
 import urllib.request
 from urllib.parse import parse_qs, unquote_plus, urlparse
 
-from .registry import PluginBase, PluginMeta, PluginRegistry
 from .. import config
-from ..utils import log, get_range_list, validate_file_name
 from ..downloaditem import Segment
+from ..utils import get_range_list, log, validate_file_name
+from .registry import PluginBase, PluginMeta, PluginRegistry
 
 META = PluginMeta(
     name='protocol_expansion',
@@ -308,10 +308,7 @@ class ProtocolExpansionPlugin(PluginBase):
 
     def _find_aria2c(self):
         """Find aria2c binary in PATH or config."""
-        if config.operating_system == 'Windows':
-            candidates = ['aria2c.exe']
-        else:
-            candidates = ['aria2c']
+        candidates = ['aria2c.exe'] if config.operating_system == 'Windows' else ['aria2c']
 
         for cmd in candidates:
             try:
