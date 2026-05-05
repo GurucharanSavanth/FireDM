@@ -26,9 +26,6 @@ def safe_collect_submodules(package):
 
 
 def collect_windows_tk_assets():
-    # PyInstaller can warn that tkinter is broken when the Python stdlib Tcl/Tk
-    # layout is present but not detected through its hook. Keep this explicit
-    # collection until upstream detection handles this Windows baseline.
     base = Path(sys.base_prefix)
     tcl_root = base / "tcl"
     dll_root = base / "DLLs"
@@ -76,10 +73,16 @@ def collect_windows_runtime_binaries():
 
 tk_datas, tk_binaries = collect_windows_tk_assets()
 runtime_binaries = collect_windows_runtime_binaries()
-datas = safe_collect_data_files("certifi") + safe_collect_data_files("yt_dlp_ejs") + tk_datas
+datas = (
+    safe_collect_data_files("certifi")
+    + safe_collect_data_files("yt_dlp_ejs")
+    + tk_datas
+)
 build_info_module = []
 if (project_root / "firedm" / "_build_info.py").is_file():
     build_info_module.append("firedm._build_info")
+
+download_engine_submodules = safe_collect_submodules("firedm.download_engines")
 
 hiddenimports = sorted(
     set(
@@ -89,8 +92,27 @@ hiddenimports = sorted(
         + safe_collect_submodules("yt_dlp_ejs")
         + safe_collect_submodules("youtube_dl")
         + safe_collect_submodules("firedm.plugins")
+        + safe_collect_submodules("firedm.frontend_common")
+        + download_engine_submodules
         + build_info_module
-        + ["_tkinter", "tkinter", "firedm.native_host", "firedm.native_messaging"]
+        + [
+            "_tkinter",
+            "tkinter",
+            "firedm.FireDM",
+            "firedm.download_engines",
+            "firedm.download_engines.base",
+            "firedm.download_engines.config",
+            "firedm.download_engines.factory",
+            "firedm.download_engines.internal_http",
+            "firedm.download_engines.models",
+            "firedm.download_engines.registry",
+            "firedm.download_engines.runtime_bridge",
+            "firedm.native_host",
+            "firedm.native_messaging",
+            "firedm.plugins.manifest",
+            "firedm.plugins.policy",
+            "firedm.plugins.registry",
+        ]
     )
 )
 

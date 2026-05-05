@@ -1,21 +1,26 @@
-"""
-    FireDM
+"""FireDM video extraction and processing module.
 
-    multi-connections internet download manager, based on "LibCurl", and "youtube_dl".
+Multi-connections internet download manager, based on "LibCurl" and "youtube_dl".
 
-    :copyright: (c) 2019-2021 by Mahmoud Elshahat.
-    :license: GNU LGPLv3, see LICENSE for more details.
+:copyright: (c) 2019-2021 by Mahmoud Elshahat.
+:license: GNU LGPLv3, see LICENSE for more details.
 """
+
+from __future__ import annotations
+
+import base64
 import copy
-import os
-import re
-import time
-from urllib.parse import urljoin
 import importlib
 import io
-import base64
+import logging
+import os
+import re
 import shlex
 import subprocess
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin
 
 from . import config
 from .downloaditem import DownloadItem, Segment
@@ -35,47 +40,72 @@ from .ffmpeg_commands import (
 from .ffmpeg_service import resolve_ffmpeg_path
 from .pipeline_logger import PipelineStage, pipeline_event, pipeline_exception, redact_url_for_log
 from .tool_discovery import resolve_binary_path
-from .utils import (log, validate_file_name, get_headers, format_bytes, run_command, delete_file, download, rename_file,
-                    run_thread, import_file)
+from .utils import (
+    log,
+    validate_file_name,
+    get_headers,
+    format_bytes,
+    run_command,
+    delete_file,
+    download,
+    rename_file,
+    run_thread,
+    import_file
+)
+
+logger = logging.getLogger(__name__)
 
 
-# todo: change docstring to google format and clean unused code
+# YouTube-DL extractors (lazy-loaded)
+ytdl: Optional[Any] = None  # Imported in separate thread
+youtube_dl: Optional[Any] = None  # Imported in separate thread
+yt_dlp: Optional[Any] = None  # Imported in separate thread
 
 
-# youtube-dl
-ytdl = None  # youtube-dl will be imported in a separate thread to save loading time
+class Logger:
+    """Capture youtube-dl stdout/stderr output."""
 
-youtube_dl = None  # youtube-dl will be imported in a separate thread to save loading time
-yt_dlp = None  # yt_dlp will be imported in a separate thread to save loading time
-
-
-class Logger(object):
-    """used for capturing youtube-dl stdout/stderr output"""
-
-    def debug(self, msg):
+    def debug(self, msg: str) -> None:
+        """Log debug message."""
         log(msg)
 
-    def error(self, msg):
-        # filter an error message when quitting youtube-dl by setting config.ytdl_abort
-        if msg == "ERROR: 'NoneType' object has no attribute 'headers'": return
+    def error(self, msg: str) -> None:
+        """Log error message, filtering known suppressible errors."""
+        # Filter error when quitting youtube-dl by setting config.ytdl_abort
+        if msg == "ERROR: 'NoneType' object has no attribute 'headers'":
+            return
         log(msg)
 
-    def warning(self, msg):
+    def warning(self, msg: str) -> None:
+        """Log warning message."""
         log(msg)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "youtube-dl Logger"
 
 
-def resolve_deno_runtime_path():
+def resolve_deno_runtime_path() -> Optional[str]:
+    """Resolve path to deno runtime executable.
+
+    Returns:
+        Path to deno executable or None if not found.
+    """
     return resolve_binary_path(
         "deno",
         operating_system=config.operating_system,
     )
 
 
-def get_ytdl_options():
-    ydl_opts = {'ignoreerrors': True, 'logger': Logger()}  # 'prefer_insecure': False, 'no_warnings': False,
+def get_ytdl_options() -> Dict[str, Any]:
+    """Build youtube-dl/yt-dlp options dictionary.
+
+    Returns:
+        Dictionary of youtube-dl options.
+    """
+    ydl_opts: Dict[str, Any] = {
+        'ignoreerrors': True,
+        'logger': Logger()
+    }
 
     active_extractor = getattr(ytdl, "__name__", None) or EXTRACTOR_SERVICE.snapshot().get("active")
     if active_extractor == PRIMARY_EXTRACTOR:
@@ -84,21 +114,21 @@ def get_ytdl_options():
 
         ffmpeg_path = resolve_ffmpeg_path(
             saved_path=config.ffmpeg_actual_path or "",
-            search_dirs=(config.current_directory, config.global_sett_folder or ""),
+            search_dirs=(str(config.current_directory), str(config.global_sett_folder or "")),
             operating_system=config.operating_system,
         )
         if ffmpeg_path:
             ydl_opts["ffmpeg_location"] = ffmpeg_path
 
     if config.proxy:
-        # youtube-dl accept socks4a, but not socks5h,
+        # youtube-dl accepts socks4a, but not socks5h
         # https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/utils.py#L5404
         proxy = config.proxy.replace('socks5h', 'socks5')
         ydl_opts['proxy'] = proxy
 
-    # set Referer website — apply to whichever extractor is active. `std_headers`
-    # is a module-level mapping in both yt_dlp and youtube_dl; changing it is
-    # the only way to pass Referer since it is not exposed as a ydl option.
+    # Set Referer website. Apply to whichever extractor is active.
+    # std_headers is a module-level mapping in both yt_dlp and youtube_dl;
+    # changing it is the only way to pass Referer since it is not exposed as a ydl option.
     if config.referer_url and ytdl is not None:
         try:
             ytdl.utils.std_headers['Referer'] = config.referer_url
@@ -109,106 +139,113 @@ def get_ytdl_options():
                 phase="referer_header",
             )
 
-    # verify / bypass server's ssl certificate
+    # Verify / bypass server SSL certificate
     ydl_opts['nocheckcertificate'] = config.ignore_ssl_cert
 
-    # website authentication
+    # Website authentication
     if config.username or config.password:
         ydl_opts['username'] = config.username
         ydl_opts['password'] = config.password
 
-    # cookies: https://github.com/ytdl-org/youtube-dl/blob/master/README.md#how-do-i-pass-cookies-to-youtube-dl
+    # Cookies: https://github.com/ytdl-org/youtube-dl/blob/master/README.md#how-do-i-pass-cookies-to-youtube-dl
     if config.use_cookies:
         ydl_opts['cookiefile'] = config.cookie_file_path
 
-    # subtitle
-    # ydl_opts['listsubtitles'] = True  # this is has a problem with playlist
-    # ydl_opts['allsubtitles'] = True  # has no effect
+    # Subtitles
     ydl_opts['writesubtitles'] = True
     ydl_opts['writeautomaticsub'] = True
-
-    # if config.log_level >= 3:
-        # ydl_opts['verbose'] = True  # it make problem with Frozen FireDM, extractor doesn't work
-    # elif config.log_level <= 1:
-    #     ydl_opts['quiet'] = True  # it doesn't work
 
     return ydl_opts
 
 
 class Video(DownloadItem):
-    """represent a youtube video object, interface for youtube-dl"""
+    """YouTube video object and youtube-dl interface."""
 
-    def __init__(self, url, vid_info=None):
+    def __init__(self, url: str, vid_info: Optional[Dict[str, Any]] = None) -> None:
+        """Initialize a Video object.
+
+        Args:
+            url: Video URL or webpage URL.
+            vid_info: Optional pre-extracted video info from youtube-dl.
+        """
         super().__init__(folder=config.download_folder)
-        self.type = 'video'
-        self.resumable = True
-        self.vid_info = vid_info  # a youtube-dl dictionary contains video information
-        # let youtube-dl fetch video info
-        if self.vid_info is None:
+        self.type: str = 'video'
+        self.resumable: bool = True
+        self.vid_info: Dict[str, Any] = vid_info or {}
+
+        # Fetch video info if not provided
+        if not self.vid_info:
             with ytdl.YoutubeDL(get_ytdl_options()) as ydl:
                 self.vid_info = ydl.extract_info(url, download=False, process=True)
 
-        self.webpage_url = self.vid_info.get('webpage_url', None) or url
+        self.webpage_url: str = self.vid_info.get('webpage_url', None) or url
 
-        # set url
-        self.url = self.webpage_url
+        # Set URL
+        self.url: str = self.webpage_url
 
-        self.simpletitle = validate_file_name(self.vid_info.get('title') or f'video{int(time.time())}')
-        self.title = self.simpletitle
-        self.name = self.title
+        self.simpletitle: str = validate_file_name(
+            self.vid_info.get('title') or f'video{int(time.time())}'
+        )
+        self.title: str = self.simpletitle
+        self.name: str = self.title
 
-        # streams
-        self.all_streams = []
-        self.stream_menu = []  # streams names
-        self.stream_menu_map = []  # actual stream objects in same order like streams names in stream_menu
-        self.names_map = {'mp4_videos': [], 'other_videos': [], 'audio_streams': [], 'extra_streams': []}
-        self.audio_streams = []
-        self.video_streams = []
+        # Streams
+        self.all_streams: List[Any] = []
+        self.stream_menu: List[str] = []  # Stream names
+        self.stream_menu_map: List[Any] = []  # Stream objects in same order
+        self.names_map: Dict[str, List[Any]] = {
+            'mp4_videos': [],
+            'other_videos': [],
+            'audio_streams': [],
+            'extra_streams': []
+        }
+        self.audio_streams: List[Any] = []
+        self.video_streams: List[Any] = []
 
-        self._selected_stream = None
+        self._selected_stream: Optional[Any] = None
 
-        # thumbnail
-        self.thumbnail_url = ''
+        # Thumbnail
+        self.thumbnail_url: str = ''
 
-        # flag for processing raw video info by youtube-dl
-        self.processed = False
+        # Flag for processing raw video info
+        self.processed: bool = False
 
         self.setup()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'Video_object(name:{self.name}, url:{self.url})'
 
-    def setup(self):
-        # url = self.vid_info.get('url', None) or self.vid_info.get('webpage_url', None) or self.vid_info.get('id', None)
-
-        # sometimes url is just video id when fetch playlist info with process=False, try to get complete url
-        # example, playlist url: https://www.youtube.com/watch?v=ethlD9moxyI&list=PL2aBZuCeDwlSXza3YLqwbUFokwqQHpPbp
-        # video url = C4C8JsgGrrY
-        # After processing will get webpage url = https://www.youtube.com/watch?v=C4C8JsgGrrY
+    def setup(self) -> None:
+        """Setup video attributes from extracted info."""
+        # URL may be just video ID when fetching playlist info with process=False
+        # Example: playlist URL returns video ID C4C8JsgGrrY
+        # After processing: https://www.youtube.com/watch?v=C4C8JsgGrrY
         self.url = self.vid_info.get('webpage_url', None) or self.url
 
-        self.simpletitle = validate_file_name(self.vid_info.get('title') or f'video{int(time.time())}')
+        self.simpletitle = validate_file_name(
+            self.vid_info.get('title') or f'video{int(time.time())}'
+        )
         self.title = validate_file_name(self.get_title()) or self.simpletitle
         self.name = self.title
 
-        # video duration
+        # Video duration
         self.duration = self.vid_info.get('duration', None)
 
-        # thumbnail
+        # Thumbnail
         self.thumbnail_url = self.vid_info.get('thumbnail', '')
 
-        # subtitles
+        # Subtitles
         self.subtitles = self.vid_info.get('subtitles', {})
         self.automatic_captions = self.vid_info.get('automatic_captions', {})
 
-        # use youtube-dl headers
+        # Use youtube-dl headers
         self.http_headers = self.vid_info.get('http_headers') or config.http_headers
 
-        # use custom user agent if any
+        # Use custom user agent if set
         if config.custom_user_agent:
             self.http_headers['User-Agent'] = config.custom_user_agent
 
-        # don't accept compressed contents
+        # Do not accept compressed contents
         self.http_headers['Accept-Encoding'] = '*;q=0'
 
         # get metadata
@@ -275,12 +312,10 @@ class Video(DownloadItem):
         audio_streams = [stream for stream in all_streams if stream.mediatype == 'audio']
         extra_streams = []
 
-        # filter repeated video streams and prefer normal over dash
-        v_names = []
-        for i, stream in enumerate(video_streams[:]):
-            if stream.raw_name in v_names and stream.mediatype == 'dash':
-                extra_streams.append(stream)
-            v_names.append(stream.raw_name)
+        # Hide repeated extractor variants that render as the same user choice.
+        # Keep discarded variants in extra_streams so format-id lookup can still work.
+        video_streams, duplicate_streams = dedupe_video_stream_menu(video_streams)
+        extra_streams.extend(duplicate_streams)
 
         # sort and rebuild video streams again
         video_streams = sorted([stream for stream in video_streams if stream not in extra_streams], key=lambda stream: stream.quality, reverse=True)
@@ -602,6 +637,49 @@ def _coerce_number(value, default=0):
         return type(default)(value)
     except (TypeError, ValueError):
         return default
+
+
+def video_stream_menu_key(stream):
+    """User-visible identity for stream menu de-duplication."""
+    return (
+        stream.extension or '',
+        int(stream.quality or 0),
+        int(stream.width or 0),
+        int(stream.height or 0),
+        stream.fps or 0,
+    )
+
+
+def video_stream_preference(stream):
+    """Prefer complete binary streams over zero-size extractor variants."""
+    size = stream.size if isinstance(stream.size, int) else 0
+    has_size = 1 if size > 0 else 0
+    non_hls = 0 if 'm3u8' in (stream.protocol or '') else 1
+    non_fragmented = 0 if stream.fragments else 1
+    mediatype_rank = {'normal': 2, 'dash': 1}.get(stream.mediatype, 0)
+    has_url = 1 if stream.url else 0
+    return has_size, size, non_hls, non_fragmented, mediatype_rank, has_url
+
+
+def dedupe_video_stream_menu(video_streams):
+    """Return visible streams plus hidden duplicate variants."""
+    selected = {}
+    duplicates = []
+
+    for stream in video_streams:
+        key = video_stream_menu_key(stream)
+        current = selected.get(key)
+        if current is None:
+            selected[key] = stream
+            continue
+
+        if video_stream_preference(stream) > video_stream_preference(current):
+            duplicates.append(current)
+            selected[key] = stream
+        else:
+            duplicates.append(stream)
+
+    return list(selected.values()), duplicates
 
 
 class Stream:
@@ -1766,7 +1844,6 @@ def process_video(vid):
             raise e
     finally:
         vid.busy = False
-
 
 
 

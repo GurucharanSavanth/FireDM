@@ -70,7 +70,7 @@ print(packages)
 
 includes = []
 include_files = []
-excludes = ['numpy', 'test', 'setuptools', 'unittest', 'PySide2']
+excludes = ['numpy', 'test', 'setuptools', 'unittest']
 
 cmd_target_name = f'{APP_NAME.lower()}.exe'
 gui_target_name = f'{APP_NAME}-GUI.exe'
@@ -157,4 +157,3 @@ fname = shutil.make_archive(output_filename, 'zip', base_dir=APP_NAME)
 
 
 print('Done .....')
-

@@ -66,7 +66,7 @@ ripgrep pattern. The check passes when ripgrep prints no matches.
 
 ## Planned Extensions (not yet implemented)
 - planned: Security grep set covering `shell=True`, `os.system`, `eval(`, `exec(`, raw cookies in logs, raw authorization headers in logs, and unsafe deserialization. Promote to required gate before L5/L6/L11.
-- planned: Dry-run build-script smoke that exercises `release_build.ps1` with `-WhatIf`/dry-run flags once Layer 12 produces the script. Must not call `pyinstaller` or `nuitka`; only argument-parsing and folder-layout checks.
+- changed: Dry-run build-script smoke exercises root `windows-build.ps1` with `-DryRun -Clean`; it must not call `pyinstaller` or `nuitka`, and it verifies argument parsing, cleanup preview, manifest, changelog, checksum, and root `release` layout.
 - planned: Manifest schema test that validates the per-release manifest JSON against a committed JSON Schema in `docs/release/`. Required gate for Layer 13.
 - planned: SBOM presence test that asserts the release artifact folder contains a `bom.json` with non-empty `components`. Required gate for Layer 13.
 - planned: Updater test matrix (Layer 14) running in a temp folder with a faked GitHub Releases API server.

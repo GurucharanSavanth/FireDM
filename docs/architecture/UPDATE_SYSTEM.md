@@ -3,7 +3,7 @@
 Status: changed 2026-05-02.
 
 ## Current State
-- observed: Release docs and scripts exist under `docs/release/`, `scripts/release/`, and `build-release.bat`.
+- changed: Release docs and scripts exist under `docs/release/`, root `windows-build.ps1`, wrapper `scripts/windows-build.ps1`, and `scripts/release/`.
 - observed: No validated in-app self-updater was added in this phase.
 
 ## Planned Flow

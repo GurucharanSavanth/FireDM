@@ -22,7 +22,8 @@
 - observed: Test runner is `pytest`; config lives in `pyproject.toml`.
 - observed: Ruff and mypy are scoped to modernized seams, not the entire legacy tree.
 - changed: `pyproject.toml` now includes `firedm/download_engines/base.py`, `models.py`, and `registry.py` in the scoped mypy file list.
-- observed: Release scripts live under `scripts/release/`; Windows wrapper is `build-release.bat`; PowerShell wrapper is `scripts/windows-build.ps1`.
+- changed: Root `windows-build.ps1` is the canonical Windows build orchestrator. `scripts/windows-build.ps1` is now a thin compatibility wrapper to the root script.
+- observed: Release scripts live under `scripts/release/`; legacy `build-release.bat` is deleted in the current dirty tree and was not restored by the canonical build-script slice.
 - observed: Linux lane files exist: `scripts/linux-build.sh`, `scripts/firedm-linux.spec`, `scripts/release/build_linux.py`, and release docs under `docs/release/`.
 - observed: `.gitignore` uses a catch-all ignore pattern; instruction docs must be explicitly allowlisted to become trackable.
 
@@ -47,7 +48,24 @@
 - changed: The first engine-modernization patch adds only a registry/model seam; it does not replace legacy controller, brain, worker, or GUI behavior.
 - changed: The second engine-modernization patch added `EngineConfig`, the default registry factory, `select_engine` preference resolution, and an inert `InternalHTTPDownloadEngine` adapter skeleton. Runtime download path is still legacy.
 - changed: Layer 3 added an advisory controller bridge only. It preserves legacy `brain(d)` execution, never calls engine `start()`, skips HLS/DASH/fragmented/video/audio/key and FTP/SFTP shapes, and records only non-secret request parity metadata.
-- changed: The first frontend migration slice adds `firedm/frontend_common/` with toolkit-neutral view models for engine selection, queue rows, failures, health rows, and update status. It adds no PySide6 dependency, no Tkinter deletion, and no controller/view runtime switch.
+- changed: The frontend migration slices add `firedm/frontend_common/` with toolkit-neutral view models and pure adapters for engine selection, download forms, queue rows/stats, failures, health rows, update status, settings summaries, diagnostics actions, help topics, and connector warnings. They add no alternate GUI-framework dependency, no Tkinter deletion, and no controller/view runtime switch.
+- verified: The canonical Windows build slice added root `windows-build.ps1`, root `release\` manifest/checksum/changelog/log output, safe cleanup planning, wrapper forwarding from `scripts/windows-build.ps1`, and build-script policy docs. `.\windows-build.ps1 -Clean -Kind OneFolder -Backend PyInstaller -Mode Release` ran successfully on the Windows host and produced `release\FireDM`; PyInstaller one-file, Nuitka, installer smoke, GUI smoke, signing, and Linux builds remain blocked/unverified.
+
+## Removed Alternate Frontend Lane (2026-05-04)
+- changed: Removed the experimental alternate frontend package, launcher script, console entry point, build artifacts, package extra, tests, and release docs from the active checkout.
+- changed: Added `firedm/plugins/manifest.py` for plugin discovery → release manifest section + UI Plugins panel.
+- changed: `pyproject.toml` removed the alternate GUI extra and console script.
+- changed: `scripts/firedm-win.spec` packages the CLI and Tk GUI executables only.
+- changed: `windows-build.ps1` records `gui_backend`, `gui_entry_point`, `included_dependencies`, `included_plugins`, `blocked_plugins`, `planned_plugins`, and `plugin_discovery_warnings` in `release/manifest.json`.
+- verified: Current validation for this removal is tracked in the active session; do not use older alternate-frontend build evidence as current authority.
+- blocked: Tk retirement remains BLOCKED. `firedm/tkview.py` full dialog parity has not been replaced. Tk is still the default release runtime.
+- blocked: Live GUI launches remain manual/headless-gated in default build.
+
+## Plugin Policy Visibility Fix (2026-05-03)
+- changed: Added `firedm/plugins/policy.py` as the local shipped-plugin policy map. `anti_detection`, `browser_integration`, `drm_decryption`, `native_extractors`, `post_processing`, and `protocol_expansion` are blocked with explicit reasons; `queue_scheduler` remains discovered but disabled by default.
+- changed: `PluginRegistry.load()` refuses policy-blocked plugins, clears persisted state for them, and detaches hooks if needed. Tk Plugin Manager disables blocked rows, and `firedm.plugins.manifest` reports the same blocks into the release manifest.
+- verified: Targeted tests for plugin policy and Windows build-script contract passed; scoped Ruff and mypy passed after the patch.
+- blocked: Live interactive GUI smoke, Linux build, signing, installer smoke, and protected/incomplete plugin activation remain blocked.
 
 ## Modernization Program Baseline
 - changed: Added architecture, release, user, security, and developer docs for the phased modernization plan.

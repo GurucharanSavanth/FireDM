@@ -1,10 +1,10 @@
 ﻿{
-    "generated_on":  "2026-04-23",
-    "repo_root":  "G:\\Personal Builds\\Revive-FireDM\\FireDM",
+    "generated_on":  "2026-05-03",
+    "repo_root":  "G:\\Personal Builds\\Modren-FireDM\\FireDM - Branch",
     "python":  {
                    "version":  "Python 3.10.11",
-                   "pip":  "pip 26.0.1 from G:\\Personal Builds\\Revive-FireDM\\FireDM\\.venv\\lib\\site-packages\\pip (python 3.10)",
-                   "executable":  "G:\\Personal Builds\\Revive-FireDM\\FireDM\\.venv\\Scripts\\python.exe"
+                   "pip":  "pip 26.1 from G:\\Personal Builds\\Modren-FireDM\\FireDM - Branch\\.venv\\lib\\site-packages\\pip (python 3.10)",
+                   "executable":  "G:\\Personal Builds\\Modren-FireDM\\FireDM - Branch\\.venv\\Scripts\\python.exe"
                },
     "git":  {
                 "version":  "git version 2.53.0.windows.2"

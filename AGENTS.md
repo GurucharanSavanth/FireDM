@@ -69,21 +69,115 @@ rg --files -g "*.md"
 - observed: `pycurl` remains runtime transport; do not remove without transport parity proof.
 - observed: ffmpeg, ffprobe, and Deno are external by default unless release docs prove bundling.
 
+## /cavecrew Subagent Presets
+
+When Codex encounters a narrow, well-scoped task, it can spawn caveman-style subagents to reduce context bloat:
+
+### cavecrew-investigator
+**Role:** Locate code, scan for patterns, answer "where is X?"  
+**Input:** file glob pattern, grep query, or architecture question  
+**Output:** caveman-compressed list of files + line numbers + ~20-char context snippets  
+**Tool set:** Glob, Grep, Read (file samples only)  
+**Limitations:** No edits, no bash commands, no multifile reasoning  
+**Use when:** "find all printf calls", "list every download hook", "where's the plugin loader"
+
+### cavecrew-builder
+**Role:** Edit 1-2 specific files per assignment  
+**Input:** file path, exact old_string/new_string pairs from investigator or main thread  
+**Output:** caveman-compressed "changed X at line Y: description"  
+**Tool set:** Edit (armed), Read (context only), Bash (validate syntax only)  
+**Limitations:** No new files, no refactors, no multifile coordination  
+**Use when:** "fix the typo in line 42", "add docstring to function X", "merge investigator findings into README"
+
+### cavecrew-reviewer
+**Role:** Audit diffs, flag security/correctness issues  
+**Input:** git diff output or file pairs (before/after)  
+**Output:** caveman-compressed "file:line: problem → fix" list  
+**Tool set:** Grep, Read, bash git commands (read-only)  
+**Limitations:** No writes, no commits, findings-only  
+**Use when:** "review this PR for security", "check for regressions in these edits", "validate test coverage"
+
 ## Multi-Agent Rules
 - Codex is primary orchestrator unless the human explicitly assigns another orchestrator.
-- Other models and Claude subagents are read-only reviewers by default.
-- No nested agent spawning.
-- No broad rewrite delegation.
-- No parallel writes to overlapping files.
-- Use file locks in `docs/agent/SESSION_HANDOFF.md` before any delegated write.
-- Codex reviews and validates final diffs.
+- Claude subagents are read-only reviewers or single-file editors by default.
+- Subagents must not spawn nested subagents; return compressed findings to Codex.
+- No broad rewrite delegation; scope each subagent task to <500 lines or 1-2 files.
+- No parallel writes to overlapping files; use SESSION_HANDOFF file locks.
+- Use cavecrew-investigator to find code before delegating edits to cavecrew-builder.
+- Codex reconciles subagent output, validates final diffs, and handles commits.
 - See `docs/agent/MULTI_AGENT_PROTOCOL.md`.
 
 ## Claude Rules
 - `CLAUDE.md` applies when Claude Code is explicitly used.
 - `.claude/agents/*.md` reviewer agents are findings-only and read-only by default.
 - Claude project memory must not contain secrets.
-- If Claude reaches a limit, it must return a continuation packet or update `docs/agent/SESSION_HANDOFF.md` when granted write ownership.
+- If Claude reaches a limit, update `docs/agent/SESSION_HANDOFF.md` when granted write ownership.
+
+## Session Handoff Protocol
+
+When a session must pause before completion:
+
+**File:** `docs/agent/SESSION_HANDOFF.md`
+
+**Contents (JSON-like format):**
+```yaml
+session_state:
+  timestamp: 2026-05-05T14:30:00Z
+  model: claude-haiku-4-5
+  user_request: "Phase 3: Documentation & Policy Update"
+  phase: 3
+  
+completed:
+  - task: "Read all plugin policy files"
+    time: "2026-05-05T14:00:00Z"
+    evidence: "firedm/plugins/policy.py, manifest.py, registry.py reviewed"
+  - task: "Created docs/QT_REMOVAL_LOG.md"
+    time: "2026-05-05T14:15:00Z"
+    path: "docs/QT_REMOVAL_LOG.md"
+
+in_progress:
+  - task: "Update README.md"
+    files_affected: ["README.md"]
+    status: "partial (50% complete)"
+    next_step: "Finish plugin policy summary section"
+
+pending:
+  - task: "Update AGENTS.md with cavecrew definitions"
+    files_affected: ["AGENTS.md"]
+    blocker: "none"
+  - task: "Verify plugin sync (policy.py vs manifest.py)"
+    files_affected: ["firedm/plugins/policy.py", "firedm/plugins/manifest.py"]
+    blocker: "none"
+  - task: "Create commit message"
+    files_affected: "none"
+    blocker: "none"
+
+file_locks:
+  - path: "README.md"
+    holder: "claude-session"
+    reason: "In-progress edits; do not merge external changes"
+    expires: "2026-05-05T15:30:00Z"
+
+next_safe_command: >
+  After resuming: re-read current state of README.md, verify AGENTS.md changes,
+  then complete pending plugin verification tasks and commit.
+
+risk_summary: "Low risk. Plugin files are well-structured. Qt references verified
+  zero count in code. Blocked plugins already exist; just updating docs."
+```
+
+**When to update:**
+- Before hitting token limit
+- Before delegating to subagent
+- Before long pause (>1 hour)
+- Before switching orchestrators
+
+**Resume checklist:**
+1. Read the handoff file
+2. Verify working tree hasn't changed (git diff --check)
+3. Re-read files in progress to find exact insertion point
+4. Resume from "next_safe_command"
+5. Remove file locks when done
 
 ## Security Boundaries
 - Follow `docs/agent/SECURITY_BOUNDARIES.md`.

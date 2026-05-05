@@ -33,9 +33,10 @@
 | `docs/user/BUILT_IN_HELP.md` | Built-in help plan | human-facing | created |
 | `docs/user/TROUBLESHOOTING.md` | Troubleshooting plan | human-facing | created |
 | `docs/developer_guide.md` | Developer guidance | human-facing | preserved unchanged |
-| `docs/frontend/GUI_MIGRATION_PLAN.md` | Staged Tk-to-common-to-Qt migration plan | frontend/architecture | created |
+| `docs/frontend/GUI_MIGRATION_PLAN.md` | Staged FireDM GUI modernization plan for the active Tk path | frontend/architecture | changed |
 | `docs/frontend/UI_PARITY_MATRIX.md` | Existing UI feature parity tracker | frontend/validation | created |
 | `docs/developer/CONTRIBUTING_MODERNIZATION.md` | Modernization contribution rules | developer | created |
+| `docs/developer/BUILD_SCRIPT_UPDATE_POLICY.md` | Canonical build-script impact policy for future patches | developer/release | created |
 | `docs/developer/DEPENDENCY_MODERNIZATION_PLAN.md` | Dependency family inventory and upgrade policy | developer/dependency | created |
 | `docs/developer/IMPLEMENTATION_LAYERS.md` | One-paragraph-per-layer developer view of the 19-layer modernization program | developer | created |
 | `docs/developer/TESTING_STRATEGY.md` | Modernization testing strategy | developer/validation | created |
@@ -43,7 +44,7 @@
 | `docs/known-issues.md` | Known issues and deferred work | human-facing | preserved unchanged |
 | `docs/windows-bootstrap.md` | Windows bootstrap guide | setup | preserved unchanged |
 | `docs/windows-bootstrap-log.md` | Windows bootstrap log | setup evidence | preserved unchanged |
-| `docs/windows-build.md` | Windows build and packaging guide | release/setup | preserved unchanged |
+| `docs/windows-build.md` | Windows build and packaging guide | release/setup | updated for canonical root `windows-build.ps1` |
 
 ## Architecture Docs
 | Path | Purpose | Classification | Decision |
@@ -127,9 +128,11 @@
 | --- | --- | --- | --- |
 | `docs/release/BUILD_ID_POLICY.md` | Unified build-code policy | release | preserved unchanged |
 | `docs/release/BUILD_SYSTEM.md` | Build orchestrator design and backend matrix | release | created |
+| `docs/release/CHANGELOG_COMPILATION.md` | Canonical release changelog compilation rules | release | created |
 | `docs/release/COMPILER_PIPELINE_PLAN.md` | PyInstaller/Nuitka staged compiler pipeline plan | release/build | created |
 | `docs/release/COMPATIBILITY_MATRIX.md` | OS/runtime compatibility matrix | release | created |
 | `docs/release/DEPENDENCY_POLICY.md` | Release dependency policy | release | preserved unchanged |
+| `docs/release/RELEASE_ARTIFACT_LAYOUT.md` | Root `release` artifact contract | release | created |
 | `docs/release/RUNTIME_VERSION_STRATEGY.md` | Python runtime lane strategy | release/runtime | created |
 | `docs/release/GITHUB_RELEASES.md` | Release publishing workflow | release | preserved unchanged |
 | `docs/release/LINUX_BUILD.md` | Linux build lane | release | preserved unchanged |

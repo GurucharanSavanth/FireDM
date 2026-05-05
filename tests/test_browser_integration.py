@@ -33,8 +33,9 @@ def _reset_registry():
 def test_manifest_no_wildcards(temp_config):
     _reset_registry()
     PluginRegistry.register(BrowserIntegrationPlugin)
+    plugin = BrowserIntegrationPlugin()
     with patch.object(BrowserIntegrationPlugin, '_register_windows_manifest', return_value=None):
-        PluginRegistry.load('browser_integration')
+        assert plugin.on_load() is True
 
     manifest_path = os.path.join(config.sett_folder, 'firedm_native.json')
     assert os.path.isfile(manifest_path)
@@ -47,14 +48,15 @@ def test_manifest_no_wildcards(temp_config):
     for origin in manifest.get('allowed_origins', []):
         assert '*' not in origin, f"Wildcard found in origin: {origin}"
 
-    PluginRegistry.unload('browser_integration')
+    plugin.on_unload()
 
 
 def test_manifest_launcher_runs_native_host_script(temp_config):
     _reset_registry()
     PluginRegistry.register(BrowserIntegrationPlugin)
+    plugin = BrowserIntegrationPlugin()
     with patch.object(BrowserIntegrationPlugin, '_register_windows_manifest', return_value=None):
-        assert PluginRegistry.load('browser_integration') is True
+        assert plugin.on_load() is True
 
     manifest_path = os.path.join(config.sett_folder, 'firedm_native.json')
     with open(manifest_path, encoding='utf-8') as f:
@@ -75,7 +77,7 @@ def test_manifest_launcher_runs_native_host_script(temp_config):
                 'firedm.exe',
             }
 
-    PluginRegistry.unload('browser_integration')
+    plugin.on_unload()
 
 
 def test_controller_native_endpoint_disabled_by_default(tmp_path, monkeypatch):

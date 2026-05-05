@@ -11,4 +11,5 @@ Status: changed 2026-05-02.
 
 ## Current Status
 - implemented: Engine descriptors and health status are modeled in code.
-- blocked: UI dropdown and real engine adapters are not implemented.
+- changed: Toolkit-neutral selector and health view models plus pure descriptor adapters are implemented for future UI use.
+- blocked: Live UI dropdown wiring and real engine execution adapters are not implemented.

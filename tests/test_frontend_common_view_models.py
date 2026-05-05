@@ -9,12 +9,18 @@ import firedm.frontend_common.view_models as view_models
 from firedm.download_engines import EngineCapability, EngineDescriptor, EngineHealth, EngineInputType
 from firedm.frontend_common import (
     AUTO_ENGINE_ID,
+    ConnectorWarningViewModel,
+    DiagnosticsActionViewModel,
+    DownloadFormViewModel,
     EngineSelectorViewModel,
     FailureSeverity,
     FailureViewModel,
     HealthItemViewModel,
+    HelpTopicViewModel,
     QueueItemState,
     QueueItemViewModel,
+    QueueStatsViewModel,
+    SettingsSummaryViewModel,
     UpdateStatus,
     UpdateStatusViewModel,
 )
@@ -133,6 +139,75 @@ def test_update_status_requires_available_version_and_failure_error():
         UpdateStatusViewModel(UpdateStatus.FAILED, current_version="2022.2.5", error="bad\nline")
 
 
+def test_download_form_validation_reports_expected_errors_and_preserves_options():
+    form = DownloadFormViewModel(
+        url="ftp://example.test/file.bin",
+        destination_folder="",
+        selected_engine_id="aria2c",
+        available_engine_ids=(AUTO_ENGINE_ID, "internal-http"),
+        advanced_options={"download_later": True, "max_connections": 4},
+    )
+
+    validation = form.validate()
+
+    assert validation.valid is False
+    assert [error.code for error in validation.errors] == [
+        "unsupported_scheme",
+        "destination_missing",
+        "engine_unavailable",
+    ]
+    assert form.advanced_options["download_later"] is True
+
+
+def test_download_form_validation_accepts_http_destination_and_auto_warning():
+    form = DownloadFormViewModel(url="https://example.test/file.bin", destination_folder="C:/Downloads")
+
+    validation = form.validate()
+
+    assert validation.valid is True
+    assert [warning.code for warning in validation.warnings] == ["auto_only"]
+
+
+def test_queue_stats_counts_states_speed_and_unknown_eta():
+    items = (
+        QueueItemViewModel(
+            uid="active",
+            name="active.bin",
+            status=QueueItemState.RUNNING,
+            speed_bps=100,
+            eta_seconds=10,
+        ),
+        QueueItemViewModel(uid="paused", name="paused.bin", status=QueueItemState.PAUSED),
+        QueueItemViewModel(uid="failed", name="failed.bin", status=QueueItemState.FAILED),
+        QueueItemViewModel(uid="done", name="done.bin", status=QueueItemState.COMPLETED),
+        QueueItemViewModel(uid="pending", name="pending.bin", status=QueueItemState.PENDING),
+    )
+
+    stats = QueueStatsViewModel.from_items(items)
+
+    assert stats.total_count == 5
+    assert stats.active_count == 1
+    assert stats.paused_count == 1
+    assert stats.failed_count == 1
+    assert stats.completed_count == 1
+    assert stats.pending_count == 1
+    assert stats.total_speed_bps == 100
+    assert stats.eta_seconds == 10
+    assert QueueStatsViewModel.from_items(()).eta_seconds is None
+
+
+def test_new_support_models_validate_shape():
+    warning = ConnectorWarningViewModel(code="warn", message="Check setting")
+    settings = SettingsSummaryViewModel(download_folder="C:/Downloads", plugin_count=2, enabled_plugin_count=1)
+    diagnostic = DiagnosticsActionViewModel(action_id="inspect-ffmpeg", label="Inspect FFmpeg")
+    topic = HelpTopicViewModel(topic_id="built-in-help", title="Built In Help", source_path="docs/user/BUILT_IN_HELP.md")
+
+    assert warning.severity == FailureSeverity.WARNING
+    assert settings.enabled_plugin_count == 1
+    assert diagnostic.safe_to_run is True
+    assert topic.source_path.endswith("BUILT_IN_HELP.md")
+
+
 def test_frontend_common_view_models_do_not_import_gui_toolkits():
     source = Path(view_models.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -143,7 +218,6 @@ def test_frontend_common_view_models_do_not_import_gui_toolkits():
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported_roots.add(node.module.split(".", 1)[0])
 
-    assert "tkinter" not in imported_roots
-    assert "PySide6" not in imported_roots
-    assert "PyQt6" not in imported_roots
+    forbidden_toolkits = {"tkinter"}
+    assert imported_roots.isdisjoint(forbidden_toolkits)
     assert view_models.__file__ is not None

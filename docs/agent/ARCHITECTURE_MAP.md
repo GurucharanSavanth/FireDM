@@ -13,8 +13,9 @@
 | --- | --- |
 | observed | Core modules live under `firedm/`. |
 | observed | Plugin modules live under `firedm/plugins/`. |
+| changed | `firedm/plugins/policy.py` centralizes shipped-plugin blocks consumed by registry, manifest, and UI surfaces. |
 | changed | Engine abstraction models and registry live under `firedm/download_engines/`. |
-| observed | Release automation lives under `scripts/release/` plus `build-release.bat`, `scripts/windows-build.ps1`, and `scripts/linux-build.sh`. |
+| changed | Release automation lives under root `windows-build.ps1`, compatibility wrapper `scripts/windows-build.ps1`, `scripts/release/`, and `scripts/linux-build.sh`; `build-release.bat` is absent in the current dirty tree. |
 | observed | Tests live under `tests/` and `tests/release/`. |
 | observed | Human docs live under `README.md`, `bootstrap/`, `docs/`, and `docs/release/`. |
 | changed | Agent docs live under `docs/agent/`. |
@@ -24,6 +25,8 @@
 | --- | --- |
 | observed | `firedm/tkview.py` imports Tkinter and defines many GUI classes including `MainWindow`, `DItem`, playlist windows, subtitle/audio/batch windows, and custom widgets. |
 | observed | `firedm/view.py` defines abstract `IView`; `firedm/cmdview.py` defines command-line view. |
+| changed | `firedm/frontend_common/view_models.py` and `firedm/frontend_common/adapters.py` define toolkit-neutral GUI migration contracts and side-effect-free controller/backend translators. |
+| changed | The experimental alternate frontend lane was removed; current GUI work stays on the FireDM Tk path until core/view seams are extracted and validated. |
 | inferred | GUI construction is side-effectful because `MainWindow` builds the full UI during init. |
 
 ## Controller/Application Orchestration
@@ -105,7 +108,7 @@
 | observed | `pyproject.toml` uses setuptools build backend and dynamic version from `firedm.version.__version__`. |
 | observed | Windows PyInstaller spec is `scripts/firedm-win.spec`. |
 | observed | Linux PyInstaller spec is `scripts/firedm-linux.spec`. |
-| observed | Windows release wrapper `build-release.bat` calls `scripts/release/build_windows.py --arch x64`. |
+| changed | Root `windows-build.ps1` is the canonical Windows build orchestrator; `scripts/windows-build.ps1` forwards to it. |
 | observed | `.github/workflows/draft-release.yml` contains Windows and Linux build jobs plus dry-run/publish gating. |
 
 ## Platform-Specific Code

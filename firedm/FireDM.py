@@ -131,8 +131,8 @@ def pars_args(arguments):
         help='opposite of "--dlist" option')
     general.add_argument(
         '-g', '--gui',
-        action='store_true',  default=argparse.SUPPRESS,
-        help='use graphical user interface, same effect if you try running %(prog)s without any parameters')
+        action='store_true', default=argparse.SUPPRESS,
+        help='use the graphical user interface. Same effect as running %(prog)s without any parameters.')
     general.add_argument(
         '--interactive',
         action='store_true',  default=argparse.SUPPRESS,
@@ -335,7 +335,9 @@ def ensure_standard_streams() -> None:
 
 
 def is_gui_mode(argv: Sequence[str]) -> bool:
-    return len(argv) == 1 or '--gui' in argv
+    if len(argv) == 1:
+        return True
+    return any(token == '--gui' or token == '-g' for token in argv[1:])
 
 
 def import_diagnostics() -> None:
@@ -471,7 +473,6 @@ def main(argv=sys.argv):
     # ------------------------------------------------------------------------------------------------------------------
     # if running application without arguments will start the gui, otherwise will run application in cmdline
     if guimode:
-        # GUI
         from .tkview import MainWindow
 
         controller = Controller(view_class=MainWindow, custom_settings=sett)

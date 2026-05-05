@@ -19,15 +19,15 @@ Preflight only:
 .\.venv\Scripts\python.exe scripts\release\check_dependencies.py --arch x64 --channel dev --skip-portable
 ```
 
-One-click wrapper:
+Canonical local build wrapper:
 
 ```powershell
-.\build-release.bat
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -Clean -Kind OneFolder -Backend PyInstaller -Mode Release
 ```
 
-The wrapper defaults to unsigned `dev`. Pass a channel name to override it, for
-example `.\build-release.bat stable`. Set `FIREDM_NO_PAUSE=1` for
-non-interactive automation. Public stable builds require signing configuration.
+The root PowerShell script is canonical. `scripts\windows-build.ps1` is a
+compatibility wrapper that forwards arguments to it. Public stable builds
+require signing configuration.
 Every build receives a deterministic `YYYYMMDD_V{N}` build ID. Use
 `--date YYYYMMDD` for deterministic tests or `--build-id YYYYMMDD_VN` for an
 explicit maintainer rebuild.

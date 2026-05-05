@@ -4,23 +4,33 @@
 # User Toggle: GUI → Settings → Plugin Manager
 """Plugin registry and hook dispatcher. All plugins default disabled."""
 
+from __future__ import annotations
+
 import ast
 import importlib
 import importlib.util
 import inspect
+import logging
 import os
 import sys
 import textwrap
 import threading
-from typing import Callable, Dict, List, Type
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Type
 
 from .. import config
 from ..utils import log
+from .policy import blocked_plugin_reason
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["PluginBase", "PluginMeta", "PluginRegistry"]
 
 
 class PluginMeta:
+    """Metadata container for a plugin."""
+
     __slots__ = (
         "name",
         "version",
@@ -43,53 +53,63 @@ class PluginMeta:
         author: str,
         description: str,
         default_enabled: bool = False,
-        dependencies: List[str] = None,
-        conflicts: List[str] = None,
-    ):
-        self.name = name
-        self.version = version
-        self.author = author
-        self.description = description
-        self.default_enabled = bool(default_enabled)
-        self.dependencies = dependencies or []
-        self.conflicts = conflicts or []
-        self.enabled = False
-        self.loaded = False
-        self.instance = None
-        self.plugin_class = None
-        self.filepath = ""
+        dependencies: Optional[List[str]] = None,
+        conflicts: Optional[List[str]] = None,
+    ) -> None:
+        self.name: str = name
+        self.version: str = version
+        self.author: str = author
+        self.description: str = description
+        self.default_enabled: bool = bool(default_enabled)
+        self.dependencies: List[str] = dependencies or []
+        self.conflicts: List[str] = conflicts or []
+        self.enabled: bool = False
+        self.loaded: bool = False
+        self.instance: Optional[PluginBase] = None
+        self.plugin_class: Optional[Type[PluginBase]] = None
+        self.filepath: str = ""
 
 
 class PluginBase:
-    META = None
+    """Base class for all plugins."""
 
-    def __init__(self):
+    META: Optional[PluginMeta] = None
+
+    def __init__(self) -> None:
         if self.META is None:
             raise RuntimeError(f"{self.__class__.__name__} missing META")
 
     def on_load(self) -> bool:
+        """Called when plugin is loaded."""
         return True
 
     def on_unload(self) -> bool:
+        """Called when plugin is unloaded."""
         return True
 
-    def on_download_start(self, d) -> bool:
+    def on_download_start(self, d: Any) -> bool:
+        """Called when a download starts."""
         return True
 
-    def on_segment_complete(self, seg) -> bool:
+    def on_segment_complete(self, seg: Any) -> bool:
+        """Called when a segment completes."""
         return True
 
-    def on_download_complete(self, d) -> bool:
+    def on_download_complete(self, d: Any) -> bool:
+        """Called when a download completes."""
         return True
 
-    def on_config_change(self, key, value):
+    def on_config_change(self, key: str, value: Any) -> bool:
+        """Called when configuration changes."""
         return True
 
 
 class PluginRegistry:
+    """Registry and dispatcher for plugins."""
+
     _plugins: Dict[str, PluginMeta] = {}
     _plugin_classes: Dict[str, Type[PluginBase]] = {}
-    _hooks: Dict[str, Dict[str, Callable]] = {
+    _hooks: Dict[str, Dict[str, Callable[..., bool]]] = {
         "download_start": {},
         "segment_complete": {},
         "download_complete": {},
@@ -99,6 +119,7 @@ class PluginRegistry:
 
     @classmethod
     def register(cls, plugin_class: Type[PluginBase]) -> None:
+        """Register a plugin class."""
         with cls._lock:
             if not inspect.isclass(plugin_class) or not issubclass(plugin_class, PluginBase):
                 log("Plugin registration rejected: invalid class")
@@ -136,6 +157,17 @@ class PluginRegistry:
             plugin_class = cls._plugin_classes.get(name)
             if not meta or not plugin_class:
                 log(f"Plugin not found: {name}")
+                return False
+            reason = blocked_plugin_reason(name)
+            if reason:
+                log(f"Plugin blocked: {name} - {reason}")
+                cls._detach_hooks(name)
+                meta.enabled = False
+                meta.loaded = False
+                meta.instance = None
+                if not isinstance(config.plugin_states, dict):
+                    config.plugin_states = {}
+                config.plugin_states[name] = False
                 return False
             if meta.loaded:
                 return True
@@ -200,6 +232,7 @@ class PluginRegistry:
 
     @classmethod
     def _attach_hooks(cls, name: str, instance: PluginBase) -> None:
+        """Attach plugin hooks to registry."""
         cls._hooks["download_start"][name] = instance.on_download_start
         cls._hooks["segment_complete"][name] = instance.on_segment_complete
         cls._hooks["download_complete"][name] = instance.on_download_complete
@@ -207,12 +240,13 @@ class PluginRegistry:
 
     @classmethod
     def _detach_hooks(cls, name: str) -> None:
+        """Detach plugin hooks from registry."""
         for hook_dict in cls._hooks.values():
             hook_dict.pop(name, None)
 
     @classmethod
-    def fire_hook(cls, hook_name: str, *args, **kwargs) -> bool:
-        """Return False if any handler blocks."""
+    def fire_hook(cls, hook_name: str, *args: Any, **kwargs: Any) -> bool:
+        """Fire a hook. Return False if any handler blocks."""
         for plugin_name, handler in list(cls._hooks.get(hook_name, {}).items()):
             try:
                 if handler(*args, **kwargs) is False:
@@ -223,7 +257,7 @@ class PluginRegistry:
         return True
 
     @classmethod
-    def scan_plugins(cls, plugin_dir: str = None) -> None:
+    def scan_plugins(cls, plugin_dir: Optional[str] = None) -> None:
         """Scan built-in plugins and user plugins only when explicitly allowed."""
         cls._scan_builtin_dir(plugin_dir or os.path.dirname(__file__))
 
@@ -233,16 +267,19 @@ class PluginRegistry:
 
     @classmethod
     def get_plugin_list(cls) -> List[PluginMeta]:
+        """Get sorted list of all registered plugins."""
         with cls._lock:
             return sorted(cls._plugins.values(), key=lambda meta: meta.name)
 
     @classmethod
     def is_enabled(cls, name: str) -> bool:
+        """Check if a plugin is enabled."""
         meta = cls._plugins.get(name)
         return bool(meta and meta.enabled)
 
     @classmethod
     def _scan_builtin_dir(cls, plugin_dir: str) -> None:
+        """Scan built-in plugins directory."""
         if not os.path.isdir(plugin_dir):
             return
 
@@ -259,6 +296,7 @@ class PluginRegistry:
 
     @classmethod
     def _scan_user_plugins(cls, user_dir: str) -> None:
+        """Scan user plugins directory."""
         if not os.path.isdir(user_dir):
             return
 
@@ -293,7 +331,8 @@ class PluginRegistry:
                 log(f"User plugin error: {fname} - {e}")
 
     @classmethod
-    def _register_from_module(cls, mod) -> None:
+    def _register_from_module(cls, mod: Any) -> None:
+        """Register plugins from a module."""
         for _, obj in inspect.getmembers(mod):
             if (
                 inspect.isclass(obj)
@@ -305,6 +344,7 @@ class PluginRegistry:
 
     @staticmethod
     def _uses_forbidden_exec(plugin_class: Type[PluginBase]) -> bool:
+        """Check if plugin class uses eval/exec."""
         try:
             source = textwrap.dedent(inspect.getsource(plugin_class))
             tree = ast.parse(source)
@@ -312,13 +352,13 @@ class PluginRegistry:
             return False
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                if node.func.id in {"eval", "exec"}:
-                    return True
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"eval", "exec"}:
+                return True
         return False
 
     @staticmethod
     def _file_uses_forbidden_exec(path: str) -> bool:
+        """Check if file uses eval/exec."""
         try:
             with open(path, encoding="utf-8") as file:
                 tree = ast.parse(file.read(), filename=path)
@@ -326,7 +366,6 @@ class PluginRegistry:
             return True
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                if node.func.id in {"eval", "exec"}:
-                    return True
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"eval", "exec"}:
+                return True
         return False

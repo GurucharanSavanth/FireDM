@@ -130,9 +130,9 @@ python scripts/release/versioning.py write-build-info \
 Local Windows builds:
 
 ```powershell
-.\build-release.bat dev
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -Clean -Kind OneFolder -Backend PyInstaller -Mode Release
 .\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev --date 20260427
-.\build-release.bat dev --build-id 20260427_V7
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -BuildId 20260427_V7 -Kind OneFolder -Backend PyInstaller
 ```
 
 Local Linux builds (Linux host or WSL only):

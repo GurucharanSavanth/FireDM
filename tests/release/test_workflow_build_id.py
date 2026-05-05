@@ -28,24 +28,24 @@ def test_draft_release_workflow_build_id_inputs_and_triggers():
     assert "FireDM_release_manifest_${{ env.build_id }}.json" in text
 
 
-def test_windows_build_script_uses_build_id_release_names():
-    script = Path("scripts/windows-build.ps1").read_text(encoding="utf-8")
+def test_windows_build_script_contract_is_root_canonical_with_wrapper():
+    root_script = Path("windows-build.ps1").read_text(encoding="utf-8")
+    wrapper = Path("scripts/windows-build.ps1").read_text(encoding="utf-8")
 
-    assert "[string]$BuildId" in script
-    assert "[string]$BuildDate" in script
-    assert "[string]$Channel" in script
-    assert "[ValidateSet(\"x64\", \"x86\", \"arm64\")][string]$Arch" in script
-    assert "[switch]$PayloadOnly" in script
-    assert "[switch]$ValidateOnly" in script
-    assert "[switch]$InstallLocalDeps" in script
-    assert "scripts\\release\\build_id.py" in script
-    assert "scripts\\release\\check_dependencies.py" in script
-    assert "scripts\\release\\build_windows.py" in script
-    assert "FireDM-$BuildId-windows-x64" in script
-    assert "SHA256SUMS_$BuildId.txt" in script
-    assert "FireDM_release_manifest_$BuildId.json" in script
-    assert "FireDM_release_notes_$BuildId.md" in script
-    assert "build-metadata.json" in script
-    assert "$BuildInfo.tag" in script
-    assert "does not publish GitHub releases" in script
-    assert "FireDM-$Version-windows-x64" not in script
+    assert "[string]$BuildId" in root_script
+    assert "[string]$BuildDate" in root_script
+    assert "[string]$Channel" in root_script
+    assert '[ValidateSet("x64", "x86", "arm64")]' in root_script
+    assert "[switch]$PayloadOnly" in root_script
+    assert "[switch]$ValidateOnly" in root_script
+    assert "[switch]$InstallLocalDeps" in root_script
+    assert "CHANGELOG-COMPILED.md" in root_script
+    assert "manifest.json" in root_script
+    assert "checksums.sha256" in root_script
+    assert "build.log" in root_script
+    assert "does not publish GitHub releases" in root_script
+    assert "Release output: $script:ReleaseRoot" in root_script
+    assert "FireDM-$Version-windows-x64" not in root_script
+
+    assert "$forward" in wrapper
+    assert "build_windows.py" not in wrapper

@@ -28,7 +28,7 @@ Per-tool decision records live in
 | L9 | Queue profiles + scheduler | planned | future: queue admission service extracted from `controller` | queue admission/scheduling tests |
 | L10 | UI/UX modernization | planned | `docs/architecture/UI_UX_PLAN.md` (design-only) | manual GUI smoke + extracted view-event tests |
 | L11 | Persistence + crash-safe state | planned | future: typed persistence service replacing direct `setting.py` writes | atomic-write tests, restore-after-crash tests |
-| L12 | Build orchestrator (`scripts/release/release_build.ps1`, `.cmd`) | planned | `docs/release/BUILD_SYSTEM.md` | dry-run build script smoke + artifact layout tests |
+| L12 | Build orchestrator (`windows-build.ps1`) | partially implemented | `windows-build.ps1`, `docs/release/BUILD_SYSTEM.md` | dry-run build script smoke + artifact layout tests |
 | L13 | Release manifest + supply-chain metadata | planned | `docs/architecture/TOOLCHAIN_DECISIONS.md` (CycloneDX, Cosign rows) | manifest schema test, SBOM presence test |
 | L14 | Self-updater (verified, staged, rollback-capable) | planned (design-only) | `docs/architecture/UPDATE_SYSTEM.md`, `docs/security/UPDATER_THREAT_MODEL.md`, `docs/release/SELF_UPDATER.md` | updater no-update / available / wrong-asset / checksum-mismatch / interrupt / rate-limit / TLS-failure / rollback / cancel tests |
 | L15 | Documentation + built-in help | partially implemented (docs scaffolded) | `docs/user/USER_GUIDE.md`, `docs/user/BUILT_IN_HELP.md`, `docs/user/TROUBLESHOOTING.md`, `docs/user/ENGINE_SELECTION.md` | docs-diff + index completeness |
@@ -74,5 +74,5 @@ Per-tool decision records live in
 
 ## Update Rules
 - Update the status column when a layer transitions states.
-- Do not promote `release_build.ps1`, the self-updater, aria2c, or yt-dlp adapters past `planned` before their files exist and tests pass.
+- Do not promote one-file packaging, Nuitka, the self-updater, aria2c, or yt-dlp adapters past `planned` before their files exist and tests pass.
 - Keep the dependency graph monotonic — if a precondition regresses, downstream layer status downgrades.

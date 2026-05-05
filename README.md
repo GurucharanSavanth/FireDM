@@ -35,13 +35,20 @@ Python 3.11 and 3.12 are not advertised as supported yet. They remain validation
 - Video metadata extraction through yt-dlp as the primary extractor.
 - Optional legacy youtube-dl compatibility through the `[legacy]` extra.
 - Single video, playlist selection, subtitles, thumbnails, DASH/HLS handling, and ffmpeg merge/conversion paths.
-- Tkinter GUI, command-line mode, clipboard monitor, scheduler, checksums, themes, and completion actions.
+- **Tkinter GUI only** (no Qt); command-line mode, clipboard monitor, scheduler, checksums, themes, and completion actions.
+- Plugin system with 6 blocked plugins (DRM, anti-detection, browser integration, native extractors, post-processing, protocol expansion); shipped plugins disabled by default.
 
 Real GUI interaction, real network downloads, playlist-network behavior, and real ffmpeg post-processing still require manual validation before a release claim. Unit tests cover deterministic seams, but mocked tests are not treated as proof of those live workflows.
 
 ## Quick Links
 
 - Architecture: [docs/architecture.md](docs/architecture.md)
+- Frontend (Tkinter): [docs/frontend.md](docs/frontend.md)
+- Plugin system: [firedm/plugins/](firedm/plugins/README.md)
+- Plugin policy & blocking rules: [firedm/plugins/policy.py](firedm/plugins/policy.py)
+- MCP integration: [docs/MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md)
+- Legacy modernization: [docs/LEGACY_MODERNIZATION.md](docs/LEGACY_MODERNIZATION.md)
+- Qt removal log: [docs/QT_REMOVAL_LOG.md](docs/QT_REMOVAL_LOG.md)
 - Dependency strategy: [docs/dependency-strategy.md](docs/dependency-strategy.md)
 - Dependency policy: [docs/release/DEPENDENCY_POLICY.md](docs/release/DEPENDENCY_POLICY.md)
 - Testing: [docs/testing.md](docs/testing.md)
@@ -92,8 +99,8 @@ Source GUI:
 Packaged Windows build:
 
 ```powershell
-.\dist\FireDM\firedm.exe --help
-.\dist\FireDM\FireDM-GUI.exe
+.\release\FireDM\firedm.exe --help
+.\release\FireDM\FireDM-GUI.exe
 ```
 
 ## Testing
@@ -110,67 +117,57 @@ The full legacy tree is not yet Ruff-gated. Ruff and mypy are intentionally scop
 
 ## Building And Packaging
 
-Wheel/sdist:
+### Canonical Build Script
+
+Root `.\windows-build.ps1` is the **canonical build entry point**:
+
+```powershell
+# Full Windows PyInstaller release build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -Clean -Kind OneFolder -Backend PyInstaller -Mode Release
+
+# Dry-run (show what would happen)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -DryRun
+
+# Dependency/toolchain preflight only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -DryRun -SkipTests
+```
+
+### Python Wheel/sdist
 
 ```powershell
 .\.venv\Scripts\python.exe -m build --no-isolation
 .\.venv\Scripts\python.exe -m twine check dist\*.whl dist\*.tar.gz
 ```
 
-Windows PyInstaller package:
+### Build Output
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64
-```
+- **Canonical artifacts:** `release\` directory
+  - `release\FireDM\firedm.exe` — CLI entry point
+  - `release\FireDM\FireDM-GUI.exe` — Tkinter GUI launcher
+  - `release\manifest.json` — Plugin manifest (all 6 blocked plugins listed)
+  - `release\build.log` — Build transcript and plugin discovery output
+- **Legacy/compat:** `dist\FireDM\` mirror (optional)
+- **Windows installer:** `dist\installers\FireDM_Setup_<build_id>_<channel>_win_x64.exe` (generated from one-folder build)
 
-Dependency/toolchain preflight only:
+## Tkinter Packaging Notes
 
-```powershell
-.\.venv\Scripts\python.exe scripts\release\check_dependencies.py --arch x64 --channel dev
-powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64 -ValidateOnly
-```
+PyInstaller may print warnings about tkinter on Windows. The project includes a manual Tcl/Tk workaround in [scripts/firedm-win.spec](scripts/firedm-win.spec). Build-time checks are in [windows-build.ps1](windows-build.ps1).
 
-One-click local Windows installer build:
-
-```powershell
-.\build-release.bat
-```
-
-The wrapper defaults to the unsigned `dev` channel and auto-generates the next
-build ID in `YYYYMMDD_V{N}` form, for example `20260427_V1`. Use
-`.\build-release.bat stable` only for a maintainer-controlled build with
-signing configured.
-
-Explicit rebuild/test examples:
-
-```powershell
-.\build-release.bat dev --date 20260427
-.\build-release.bat dev --build-id 20260427_V7
-```
-
-This writes the x64 installer, portable zip, release notes, manifest, license
-inventory, dependency status report, and SHA256 checksums under
-`dist\installers\`, `dist\portable\`, `dist\licenses\`, and
-`dist\checksums\`.
-
-The preferred Windows distributor is the installed-tree payload generated from
-the PyInstaller one-folder build, then installed by
-`dist\installers\FireDM_Setup_<build_id>_<channel>_win_x64.exe`. Historical
-AppImage and old executable scripts remain for reference only.
-
-## PyInstaller Notes
-
-PyInstaller may still print a warning that tkinter is broken on this Windows baseline. The project keeps a manual Tcl/Tk collection workaround in [scripts/firedm-win.spec](scripts/firedm-win.spec) and build-time asset checks in [scripts/windows-build.ps1](scripts/windows-build.ps1).
-
-A valid Windows package must include:
+A valid Windows package must include these Tkinter assets:
 
 ```text
-dist\FireDM\_internal\tkinter\__init__.py
-dist\FireDM\_internal\_tcl_data\init.tcl
-dist\FireDM\_internal\_tk_data\tk.tcl
+release\FireDM\_internal\tkinter\__init__.py
+release\FireDM\_internal\_tcl_data\init.tcl
+release\FireDM\_internal\_tk_data\tk.tcl
 ```
 
-Do not remove the manual spec override until PyInstaller detection works without warnings and `dist\FireDM\firedm.exe --imports-only` confirms Tk imports.
+Verify with:
+
+```powershell
+.\release\FireDM\firedm.exe --imports-only  # Should show "tkinter: ok"
+```
+
+Do not remove the manual spec override until PyInstaller detection works without warnings.
 
 ## External Tools
 
@@ -206,8 +203,9 @@ CI currently targets Python 3.10 because that is the only verified runtime. Add 
 | Unit tests | Maintained through `pytest` |
 | Scoped lint/type checks | Maintained for modernized seams |
 | Wheel/sdist build | Verified with `python -m build --no-isolation` |
-| Windows PyInstaller build | Verified on the current Windows baseline |
-| Packaged CLI import smoke | Verified with `dist\FireDM\firedm.exe --imports-only` |
+| Windows PyInstaller build | Verified with `.\windows-build.ps1 -Clean -Kind OneFolder -Backend PyInstaller -Mode Release` |
+| Packaged CLI import smoke | Verified with `release\FireDM\firedm.exe --imports-only` |
+| Packaged Tk GUI launcher | Built as `release\FireDM\FireDM-GUI.exe`; full interaction remains manual |
 | Full GUI interaction | Manual/unverified |
 | Real file downloads | Manual/unverified |
 | Playlist network behavior | Manual/unverified |
@@ -223,13 +221,13 @@ Before publishing a Windows release, run:
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m build --no-isolation
 .\.venv\Scripts\python.exe -m twine check dist\*.whl dist\*.tar.gz
-powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -Clean -Kind OneFolder -Backend PyInstaller -Mode Release
 .\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev
 .\.venv\Scripts\python.exe scripts\release\validate_portable.py --archive dist\portable\<portable>.zip
 .\.venv\Scripts\python.exe scripts\release\github_release.py --manifest dist\release-manifest.json
-.\dist\FireDM\firedm.exe --help
-.\dist\FireDM\firedm.exe --imports-only
-.\dist\FireDM\FireDM-GUI.exe
+.\release\FireDM\firedm.exe --help
+.\release\FireDM\firedm.exe --imports-only
+.\release\FireDM\FireDM-GUI.exe
 ```
 
 Manual checks still required:
@@ -245,7 +243,7 @@ Manual checks still required:
 - If `ffmpeg` is installed but not found or not usable, check the actual install path and run `ffmpeg -version`. Agent shells can have stale `PATH`; FireDM also checks Winget package folders where the current process has access. If Winget package folders are access-denied, add ffmpeg to `PATH` or copy `ffmpeg.exe` beside the app. `ffprobe` health is reported separately and can be fixed by placing `ffprobe.exe` beside `ffmpeg.exe` or on `PATH`.
 - If PyInstaller reports tkinter as broken, keep the manual Tcl/Tk spec override and verify packaged Tk assets exist.
 - If `.venv` dependency installation fails on Windows, verify Python `3.10.11` and the official pycurl wheel path before attempting source builds.
-- If `dist\FireDM` cannot be removed during rebuild, close stale packaged FireDM processes.
+- If `release\FireDM` or `dist\FireDM` cannot be removed during rebuild, close stale packaged FireDM processes.
 
 ## Known Limitations
 

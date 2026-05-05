@@ -54,8 +54,8 @@ program. The status table and dependency graph live in
 - planned: Replace direct writes in `setting.py` with a typed persistence service that performs atomic file replace (write-temp-then-rename) for `setting.cfg`, `downloads.dat`, and `thumbnails.dat`. Restored downloads still drop unsafe completion-action keys per existing `setting.load_d_map()` rule. Validation gate: atomic-write tests, restore-after-crash tests, and a no-execute-from-saved-state regression.
 - depends on: L1, L9.
 
-## L12 — Build orchestrator (`scripts/release/release_build.ps1`, `.cmd`)
-- planned (not implemented): `release_build.ps1` becomes the authoritative entry point for clean/debug/release builds, one-folder/one-file selection, backend `pyinstaller|nuitka|auto`, log capture, manifest emission, checksum generation, and safe smoke checks. `release_build.cmd` is the double-click wrapper. No global Python install, no destructive delete outside repo, no hidden network restore. Validation gate: dry-run script smoke plus artifact layout test.
+## L12 — Build orchestrator (`windows-build.ps1`)
+- changed: root `windows-build.ps1` is the authoritative Windows entry point for clean/debug/release builds, one-folder/portablezip selection, backend `auto|pyinstaller|nuitka`, log capture, manifest emission, checksum generation, changelog compilation, and safe smoke checks. `scripts/windows-build.ps1` is a compatibility wrapper. No global Python install, no destructive delete outside repo, no hidden network restore. One-file, Nuitka, signing, installer smoke, GUI smoke, and Linux packaging remain separately gated.
 - depends on: L3 (stable engine surface for smoke), L4 (tool discovery for build-time tools).
 
 ## L13 — Release manifest + supply-chain metadata

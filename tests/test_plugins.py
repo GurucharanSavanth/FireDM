@@ -446,6 +446,20 @@ class TestSandboxDefaults(unittest.TestCase):
         self.assertIn('plugin_dir', cfg.settings_keys)
         self.assertIn('allow_user_plugins', cfg.settings_keys)
 
+    def test_blocked_shipped_plugins_cannot_load(self):
+        import firedm.config as cfg
+        from firedm.plugins.policy import BLOCKED_PLUGIN_REASONS
+
+        cfg.plugin_states = {}
+        reg, _ = _fresh_registry()
+        reg.scan_plugins()
+
+        for name in BLOCKED_PLUGIN_REASONS:
+            self.assertIn(name, reg._plugins)
+            self.assertFalse(reg.load(name), name)
+            self.assertFalse(reg._plugins[name].enabled, name)
+            self.assertFalse(cfg.plugin_states.get(name, False), name)
+
     def test_eval_plugin_rejected(self):
         reg, Base = _fresh_registry()
         from firedm.plugins.registry import PluginMeta

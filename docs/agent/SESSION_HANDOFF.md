@@ -122,9 +122,49 @@ HLS, fragmented, FTP/SFTP, and proxy paths.
 - verified: `.venv\Scripts\python.exe -m compileall .\firedm .\scripts\release` -> clean.
 - blocked: `.venv\Scripts\python.exe -m ruff check .\firedm .\tests` still fails on pre-existing legacy lint debt (730 findings across legacy modules/tests). Scoped modernized ruff passed.
 - verified: `.venv\Scripts\python.exe -m mypy` -> Success: no issues found in 16 source files.
-- verified: false-claim docs scan for implemented PySide6/Qt/Tk removal/updater/release_build/aria2/yt-dlp claims returned no matches after rewording one guard line.
+- verified: false-claim docs scan for implemented GUI replacement, Tk removal, updater, release_build, aria2, and yt-dlp claims returned no matches after rewording one guard line.
 - verified: `git diff --check` -> clean.
 - observed: First reviewer BLOCK was due prior Layer 3 `firedm/controller.py` dirty state outside this slice; no frontend-common issue was found. Scoped reviewer recheck returned PASS.
-- observed: Official docs check recorded Python 3.14.4 as latest stable, PySide6/Qt as a planned candidate, and PyInstaller/Nuitka constraints for future build layers.
-- blocked: No Qt dependency was added; no GUI smoke or package build was run in this slice.
-- next: Add `DownloadFormViewModel`, queue stats, and controller adapter tests before any Qt shell work.
+- observed: Official docs check recorded Python 3.14.4 as latest stable and PyInstaller/Nuitka constraints for future build layers.
+- blocked: No alternate GUI dependency was added; no GUI smoke or package build was run in this slice.
+- next: Add `DownloadFormViewModel`, queue stats, and controller adapter tests before any GUI runtime replacement work.
+
+## Canonical Windows Build Script Slice (2026-05-03)
+- changed: Added root `windows-build.ps1` as the canonical Windows build orchestrator.
+- changed: Replaced `scripts/windows-build.ps1` with a thin wrapper that forwards arguments to root `windows-build.ps1`.
+- changed: Added safe cleanup planning inside the root script with repo containment checks, `Remove-Item -LiteralPath`, `-DryRun`, `-Clean`, `-NoClean`, and PowerShell `ShouldProcess` support.
+- changed: Root `release\` is now the canonical output contract for `build.log`, `manifest.json`, `checksums.sha256`, and `CHANGELOG-COMPILED.md`.
+- changed: Added tests in `tests/release/test_windows_build_script.py` for parser validation, dry-run cleanup safety, wrapper behavior, manifest fields, checksums, and changelog output.
+- changed: Updated release/developer docs for build system, artifact layout, changelog compilation, and future build-script update policy.
+- observed: `build-release.bat` was already deleted in the dirty tree before this slice and was not restored.
+- observed: `dist\` and `build\` contain generated/stale release artifacts and are cleanup targets only when explicitly requested through `-Clean`.
+- verified: `.\windows-build.ps1 -Clean -Kind OneFolder -Backend PyInstaller -Mode Release` completed successfully on the Windows host after QA, produced `release\FireDM`, and ran packaged `firedm.exe --help` plus `firedm.exe --imports-only`.
+- blocked: PyInstaller one-file, Nuitka, signing, installer smoke, GUI smoke, Linux build, and release publishing are not claimed by this slice.
+- next: Validate PortableZip output or add installer/signing/SBOM lanes as separate bounded patches.
+
+## Frontend Connector Adapter Slice (2026-05-03)
+- changed: Expanded `firedm/frontend_common/view_models.py` with `DownloadFormViewModel`, `DownloadFormValidation`, `QueueStatsViewModel`, `ControllerStatusViewModel`, `SettingsSummaryViewModel`, `DiagnosticsActionViewModel`, `HelpTopicViewModel`, and `ConnectorWarningViewModel`.
+- changed: Added `firedm/frontend_common/adapters.py` for pure, side-effect-free translation from legacy download-item-like objects, engine descriptors, engine health, structured failures, update mappings, settings mappings, diagnostics health, and help paths into common view models.
+- changed: Updated `firedm/frontend_common/__init__.py`, `pyproject.toml`, frontend docs, `docs/release/BUILD_SYSTEM.md`, `docs/agent/ARCHITECTURE_MAP.md`, and `docs/agent/PROJECT_MEMORY.md`.
+- changed: Added `tests/test_frontend_common_adapters.py` and expanded `tests/test_frontend_common_view_models.py`.
+- changed: Root `windows-build.ps1` QA now includes `tests\test_frontend_common_adapters.py` and scoped Ruff now checks the new adapter test.
+- observed: No Tkinter, alternate GUI toolkit, controller, or config imports were added to `firedm/frontend_common`.
+- blocked: Tkinter remains the default GUI. No alternate GUI dependency or shell was added. No live GUI smoke was run in this slice.
+
+## Alternate Frontend Removal Slice (2026-05-04)
+- changed: Removed the experimental alternate frontend package, launcher, console entry point, package extra, tests, docs, PyInstaller collection path, and build-script smoke lane.
+- changed: `firedm/FireDM.py` now exposes a boolean `--gui` flag and dispatches GUI mode only to `firedm.tkview.MainWindow`.
+- changed: `scripts/firedm-win.spec` and root `windows-build.ps1` now compile only `firedm.exe` and `FireDM-GUI.exe`.
+- changed: Root `windows-build.ps1` no longer emits alternate-frontend manifest fields or release artifacts.
+- blocked: Full Tk dialog parity replacement remains blocked; current work must modernize the FireDM core/view seams before any new GUI framework is introduced.
+- next: Validate the Tk-only one-click release build, then continue engine/controller refactors in bounded slices.
+
+## Plugin Policy Visibility Fix (2026-05-03)
+- changed: Added `firedm/plugins/policy.py` and wired it through `firedm/plugins/registry.py`, `firedm/plugins/manifest.py`, and the Tk Plugin Manager.
+- changed: Policy-blocked shipped plugins are `anti_detection`, `browser_integration`, `drm_decryption`, `native_extractors`, `post_processing`, and `protocol_expansion`; blocked plugins cannot load and are reported in `blocked_plugins`.
+- changed: `queue_scheduler` remains discovered, disabled by default, and selectable; no build script enables it.
+- changed: Removed stale alternate-frontend visibility instructions after the current removal slice.
+- changed: Tests expanded in `tests/test_plugin_manifest.py`, `tests/test_plugins.py`, and `tests/release/test_windows_build_script.py`.
+- verified: Targeted pytest over plugin policy and Windows build-script tests passed.
+- verified: Scoped Ruff over changed plugin/build-test files passed; `.\.venv\Scripts\python.exe -m mypy` passed.
+- blocked: Full pytest, canonical real release build, packaged smoke, and final `git diff --check` still need rerun after docs.

@@ -81,6 +81,21 @@ def _dash_video_1080p():
     }
 
 
+def _duplicate_1080p_hls_variant(format_id):
+    return {
+        "format_id": format_id,
+        "url": f"https://example.invalid/{format_id}.m3u8",
+        "ext": "mp4",
+        "width": 1920,
+        "height": 1080,
+        "fps": 60,
+        "vcodec": "avc1.64002a",
+        "filesize": 0,
+        "protocol": "m3u8_native",
+        "fragments": [{"url": "seg-1.ts"}],
+    }
+
+
 def _fake_vid_info():
     return {
         "id": "jNQXAC9IVRw",
@@ -143,6 +158,43 @@ def test_single_video_stream_menu_is_populated(tmp_path):
     # reported a None bitrate for it.
     seen = {getattr(s, "format_id", None) for s in video.stream_menu_map if s is not None}
     assert "18" in seen
+
+
+def test_single_video_stream_menu_deduplicates_visible_video_variants(tmp_path):
+    config.download_folder = str(tmp_path)
+    info = _fake_vid_info()
+    info["formats"].extend(
+        [
+            {
+                "format_id": "299",
+                "url": "https://example.invalid/video_1080p60.mp4",
+                "ext": "mp4",
+                "width": 1920,
+                "height": 1080,
+                "fps": 60,
+                "vcodec": "avc1.64002a",
+                "acodec": "none",
+                "abr": 0,
+                "tbr": 5800.0,
+                "filesize": 250_000_000,
+                "protocol": "https",
+            },
+            _duplicate_1080p_hls_variant("301-0"),
+            _duplicate_1080p_hls_variant("301-1"),
+            _duplicate_1080p_hls_variant("301-2"),
+        ]
+    )
+
+    video = Video(url="https://www.youtube.com/watch?v=jNQXAC9IVRw", vid_info=info)
+
+    visible_streams = [
+        video.stream_menu_map[idx]
+        for idx, name in enumerate(video.stream_menu)
+        if name.startswith("    ") and video.stream_menu_map[idx] is not None
+    ]
+    duplicate_menu_rows = [stream for stream in visible_streams if stream.extension == "mp4" and stream.quality == 1080 and stream.fps == 60]
+
+    assert [stream.format_id for stream in duplicate_menu_rows] == ["299"]
 
 
 def test_single_video_title_and_name_populated(tmp_path):

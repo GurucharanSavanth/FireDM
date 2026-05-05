@@ -3994,6 +3994,11 @@ class MainWindow(IView):
 
             for meta in plugins:
                 pname = meta.name
+                try:
+                    from .plugins.policy import blocked_plugin_reason
+                    blocked_reason = blocked_plugin_reason(pname)
+                except Exception:
+                    blocked_reason = ''
                 row = tk.Frame(plugin_list_frame, bg=bg)
                 row.pack(anchor='w', fill='x', padx=5, pady=1)
                 var = tk.BooleanVar(value=meta.enabled)
@@ -4012,11 +4017,15 @@ class MainWindow(IView):
                         log(f'Plugin toggle error: {_e}')
 
                 label = f'{pname}  v{meta.version}  [{meta.author}]  — {meta.description}'
+                if blocked_reason:
+                    label = f'{label}  [BLOCKED: {blocked_reason}]'
                 cb = tk.Checkbutton(
                     row, text=label, variable=var, command=_toggle,
-                    bg=bg, fg='#44bb44' if meta.enabled else fg,
+                    bg=bg, fg='#aa6666' if blocked_reason else ('#44bb44' if meta.enabled else fg),
                     selectcolor=bg, activebackground=bg, anchor='w',
                 )
+                if blocked_reason:
+                    cb.configure(state='disabled')
                 cb.pack(side='left', anchor='w')
 
         tk.Button(tab, text='Refresh plugins', bg=bg, fg=fg,

@@ -16,11 +16,11 @@ Status: changed 2026-05-03.
 - verified: Python 3.14.4 is the latest stable CPython release as of this run, but current Python docs state Python 3.14 supports Windows 10 and newer only.
 - verified: Python docs state Windows 8.1 needs Python 3.12, and Windows 7 needs Python 3.8.
 - verified: yt-dlp documents CPython 3.10+ support and FFmpeg use for several media operations.
-- verified: PySide6 is installable from PyPI but includes Qt binaries and LGPL/GPL/commercial licensing implications.
+- changed: The prior alternate GUI-framework dependency lane was removed from this checkout.
 - verified: uv can manage project dependencies and a lockfile, but this checkout does not yet use a uv lockfile.
 
 ## Policy
-1. Do not widen Python or add PySide6 in the same patch as runtime/download changes.
+1. Do not widen Python or add GUI-framework dependencies in the same patch as runtime/download changes.
 2. Upgrade one dependency family per patch.
 3. Run target tests plus full suite after each family.
 4. Keep `requirements.txt` and `pyproject.toml` coherent.

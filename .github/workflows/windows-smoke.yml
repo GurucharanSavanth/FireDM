@@ -9,6 +9,7 @@ on:
       - "setup.py"
       - "pyproject.toml"
       - "firedm.py"
+      - "windows-build.ps1"
       - "scripts/firedm-win.spec"
       - "scripts/windows-build.ps1"
       - "scripts/release/**"
@@ -21,6 +22,7 @@ on:
       - "setup.py"
       - "pyproject.toml"
       - "firedm.py"
+      - "windows-build.ps1"
       - "scripts/firedm-win.spec"
       - "scripts/windows-build.ps1"
       - "scripts/release/**"
@@ -78,20 +80,19 @@ jobs:
 
       - name: Build Windows distribution
         shell: pwsh
-        run: .\scripts\windows-build.ps1 -PythonExe (Get-Command python).Source -Channel dev -Arch x64 -SkipTests -SkipLint
+        run: .\windows-build.ps1 -PythonExe (Get-Command python).Source -Channel dev -Arch x64 -Kind OneFolder -Backend PyInstaller -SkipTests -SkipLint
 
       - name: Smoke source and packaged entrypoints
         shell: pwsh
         run: |
           python -m firedm --help
           python firedm.py --imports-only
-          .\dist\FireDM\firedm.exe --help
-          $portable = Get-ChildItem dist\portable\*_portable.zip | Select-Object -First 1
-          python scripts\release\validate_portable.py --archive $portable.FullName
+          .\release\FireDM\firedm.exe --help
+          .\release\FireDM\firedm.exe --imports-only
 
       - name: Upload Windows distribution
         uses: actions/upload-artifact@v7
         with:
           name: FireDM-Windows
-          path: dist/FireDM/**
+          path: release/**
           if-no-files-found: error

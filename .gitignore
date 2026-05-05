@@ -75,6 +75,7 @@ firedm/_build_info.py
 !CLAUDE.md
 !LICENSE
 !firedm.py
+!windows-build.ps1
 !build-release.bat
 !README.md
 !requirements.txt
@@ -125,3 +126,5 @@ firedm/_build_info.py
 !.github/
 !.github/workflows/
 !.github/workflows/*
+!career-ops/
+!career-ops/**

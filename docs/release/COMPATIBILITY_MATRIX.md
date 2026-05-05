@@ -19,3 +19,23 @@ Rules:
 - implemented: No code claims XP/Vista/7 support.
 - planned: Legacy lane remains separate and may have reduced features.
 - blocked: Modern architecture must not be weakened for legacy compatibility.
+
+## GUI Backend Compatibility
+
+| Backend | Default? | Source smoke | Headless construction smoke | Packaged smoke | Live launch | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Tkinter | yes | implicit (existing tests) | n/a | `firedm.exe --imports-only` verified | manual | Active release runtime; alternate preview frontend was removed. |
+
+## Plugin Manifest Coverage (added 2026-05-03)
+
+| Plugin | Status (default) | Notes |
+| --- | --- | --- |
+| `anti_detection` | blocked | TLS/proxy/header impersonation claims are not release-validated or safely configurable. |
+| `browser_integration` | blocked | Native-host origin provisioning and authentication need real connector validation before exposure. |
+| `drm_decryption` | blocked | DRM bypass, protected-media circumvention, license-server access, and media-key extraction are prohibited. |
+| `native_extractors` | blocked | Site-specific extractor behavior and embedded public API token use need release tests. |
+| `post_processing` | blocked | AV/extract/convert substeps need argv-safe execution, path validation, and explicit per-step controls. |
+| `protocol_expansion` | blocked | Partial FTP/WebDAV/SFTP/magnet/IPFS/data handlers need capability split or full dependency/RPC safety tests. |
+| `queue_scheduler` | disabled | Discovered and selectable; no live activation by build pipeline. |
+
+`release/manifest.json` records the same set under `included_plugins`/`blocked_plugins`/`planned_plugins` after each build.

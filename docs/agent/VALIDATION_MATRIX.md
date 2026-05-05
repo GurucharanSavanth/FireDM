@@ -38,6 +38,7 @@
 | focused regression | `.\.venv\Scripts\python.exe scripts\run_regression_suite.py` | available |
 | security tests | `.\.venv\Scripts\python.exe -m pytest -q tests/test_security.py` | available |
 | browser integration tests | `.\.venv\Scripts\python.exe -m pytest -q tests/test_browser_integration.py` | available |
+| frontend common adapter tests | `.\.venv\Scripts\python.exe -m pytest -q tests/test_frontend_common_view_models.py tests/test_frontend_common_adapters.py` | available |
 
 ## Integration/Smoke Validation
 | Check | Command | Status |
@@ -55,12 +56,12 @@
 | metadata check | `.\.venv\Scripts\python.exe -m twine check dist\*.whl dist\*.tar.gz` | available if build artifacts exist |
 | dependency preflight | `.\.venv\Scripts\python.exe scripts\release\check_dependencies.py --arch x64 --channel dev --skip-portable` | available |
 | Windows payload | `.\.venv\Scripts\python.exe scripts\release\build_windows.py --arch x64 --channel dev` | available |
-| wrapper | `.\build-release.bat dev` | available |
+| canonical Windows build dry-run | `powershell -NoProfile -ExecutionPolicy Bypass -File .\windows-build.ps1 -DryRun -Clean -SkipTests -SkipSmoke` | available |
 
 ## Windows-Specific Validation
 | Check | Command | Status |
 | --- | --- | --- |
-| PowerShell build wrapper | `powershell -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64` | available |
+| PowerShell build wrapper | `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-build.ps1 -Channel dev -Arch x64` | available; forwards to root `.\windows-build.ps1` |
 | portable validation | `.\.venv\Scripts\python.exe scripts\release\validate_portable.py --archive <portable_zip>` | available when artifact exists |
 | installer validation | `.\.venv\Scripts\python.exe scripts\release\validate_installer.py --artifact <installer_exe> --test-repair --test-uninstall --test-upgrade --test-downgrade-block` | available when artifact exists |
 | installed GUI smoke | `.\.venv\Scripts\python.exe scripts\release\smoke_installed_gui.py --install-root <install_root> --timeout 20 --headless-safe --no-network` | available when install root exists |

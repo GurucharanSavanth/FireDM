@@ -4,7 +4,7 @@ Status: changed 2026-05-03.
 
 ## Local Build Evidence
 - observed: `scripts/windows-build.ps1` runs PyInstaller against `scripts/firedm-win.spec` for Windows x64.
-- observed: `build-release.bat` calls `scripts/release/build_windows.py`.
+- changed: root `windows-build.ps1` is the canonical Windows build entry point; `scripts/windows-build.ps1` forwards to it.
 - observed: Linux build scripts exist but refuse non-Linux hosts for the Linux PyInstaller lane.
 - observed: `nuitka` is not available on PATH and no Nuitka build lane exists in scripts.
 - observed: current generated `dist/` and `build/` artifacts are stale for this checkout and are not proof of a current build.
@@ -18,8 +18,8 @@ Status: changed 2026-05-03.
 | Nuitka modes | https://nuitka.net/user-documentation/use-cases.html | standalone and onefile modes exist; onefile extracts on target. | standalone before onefile |
 
 ## Planned Orchestrator
-- planned: `scripts/release/release_build.ps1` will drive backend `auto|pyinstaller|nuitka`, mode `debug|release`, kind `onefolder|onefile|portablezip`, dry-run, logs, manifest, checksums, smoke tests.
-- planned: `release_build.cmd` will be a human launcher for the PowerShell orchestrator.
+- changed: root `windows-build.ps1` drives backend `Auto|PyInstaller|Nuitka`, mode `Debug|Release`, kind `OneFolder|OneFile|PortableZip`, dry-run, logs, manifest, checksums, changelog compilation, and smoke checks.
+- blocked: a separate double-click launcher is not restored in this dirty tree; `build-release.bat` is absent and root PowerShell is authoritative.
 - blocked: no global installs, no PATH mutation, no destructive cleanup outside repo.
 
 ## Backend Order
