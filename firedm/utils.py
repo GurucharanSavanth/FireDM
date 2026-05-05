@@ -523,8 +523,8 @@ def run_command(cmd, verbose=True, shell=False, hide_window=True, d=None, nonblo
 
     try:
 
-        # split command if shell parameter set to False
-        if not shell:
+        # split command if shell parameter set to False; list args pass through unchanged
+        if not shell and isinstance(cmd, str):
             cmd = shlex.split(cmd)
 
         # startupinfo to hide terminal window on windows

@@ -15,7 +15,8 @@ def test_draft_release_workflow_build_id_inputs_and_triggers():
     for key in ("channel", "arch", "build_id", "date", "publish_release", "draft", "prerelease"):
         assert key in dispatch_inputs
 
-    assert "branches" not in triggers.get("push", {})
+    # push to main is now a trigger for rolling draft releases
+    assert "main" in triggers.get("push", {}).get("branches", [])
     assert triggers["push"]["tags"] == ["build-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_V*"]
     text = workflow_path.read_text(encoding="utf-8")
     assert "scripts\\release\\build_windows.py" in text

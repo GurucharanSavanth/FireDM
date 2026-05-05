@@ -19,10 +19,8 @@ BLOCKED_PLUGIN_REASONS: dict[str, str] = {
         "blocked until site-specific extractor behavior and embedded public API "
         "token use are covered by release tests"
     ),
-    "post_processing": (
-        "blocked until antivirus/extract/convert substeps use argv-safe command "
-        "execution, path validation, and explicit per-step UI controls"
-    ),
+    # post_processing unblocked 2026-05-05: argv-safe commands, path validation,
+    # and per-step config controls implemented. Unblocked for user opt-in.
     "protocol_expansion": (
         "blocked until partial FTP/WebDAV/SFTP/magnet/IPFS/data handlers are split "
         "or fully validated with dependency and RPC safety tests"

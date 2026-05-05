@@ -31,6 +31,8 @@ settings_keys: list[str] = [
     'window_maximized', 'force_window_maximize', 'd_preview', 'updater_version', 'media_presets',
     'video_title_template', 'ffmpeg_actual_path', 'allow_user_extractors',
     'plugin_states', 'plugin_dir', 'allow_user_plugins',
+    'queue_scheduler_categories', 'queue_scheduler_time_rules',
+    'post_processing_steps',
 ]
 
 # ----------------------------------------------------------------------------------------General ----------------------
@@ -137,6 +139,25 @@ allow_user_extractors: bool = False
 plugin_states: dict[str, bool] = {}  # {plugin_name: bool}, persisted in setting.cfg
 plugin_dir: str = ''  # Path to custom user plugin directory
 allow_user_plugins: bool = False  # SECURITY: loading user plugins = importlib exec
+
+# Queue scheduler settings (read by queue_scheduler plugin when loaded)
+queue_scheduler_categories: dict[str, dict] = {
+    'Videos': {'max_concurrent': 2, 'speed_limit': 0},
+    'Audio': {'max_concurrent': 2, 'speed_limit': 0},
+    'Documents': {'max_concurrent': 3, 'speed_limit': 0},
+    'Compressed': {'max_concurrent': 2, 'speed_limit': 0},
+    'General': {'max_concurrent': 3, 'speed_limit': 0},
+}
+queue_scheduler_time_rules: list[dict] = []  # [{start, end, categories}] persisted as list of dicts
+
+# Post-processing step toggles (read by post_processing plugin on each download complete)
+post_processing_steps: dict[str, bool] = {
+    'antivirus': False,
+    'extract': False,
+    'organize': False,
+    'convert': False,
+    'duplicate': False,
+}
 
 # Video qualities
 vq: dict[int, str] = {

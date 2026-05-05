@@ -46,11 +46,26 @@ class QueueSchedulerPlugin(PluginBase):
         self._queue_lock = threading.Lock()
         self._active_uids = set()
         self._active_categories = {}
-        self.categories = dict(_DEFAULT_CATEGORIES)
-        # [(start_time, end_time, allowed_categories_list)]
-        self.time_rules = []
+        # Load categories from config (persisted); fall back to compile-time defaults
+        self.categories = dict(getattr(config, 'queue_scheduler_categories', _DEFAULT_CATEGORIES))
+        # Time rules from config: [{start: "HH:MM", end: "HH:MM", categories: [...]}]
+        self.time_rules = self._load_time_rules()
         self._scheduler_thread = None
         self._running = False
+
+    @staticmethod
+    def _load_time_rules() -> list:
+        raw = getattr(config, 'queue_scheduler_time_rules', [])
+        rules = []
+        for entry in raw:
+            try:
+                start = datetime.strptime(entry['start'], '%H:%M').time()
+                end = datetime.strptime(entry['end'], '%H:%M').time()
+                cats = entry.get('categories', [])
+                rules.append((start, end, cats))
+            except Exception:
+                pass
+        return rules
 
     def on_load(self) -> bool:
         self._running = True

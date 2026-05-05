@@ -74,10 +74,12 @@ def test_workflow_uploads_per_platform_artifacts():
     assert "FireDM_release_manifest_${{ needs.resolve-build-code.outputs.build_code }}_linux.json" in text
 
 
-def test_workflow_does_not_publish_on_normal_push():
+def test_workflow_push_triggers():
     payload, _ = load_workflow()
     triggers = payload.get("on") or payload.get(True)
-    # only tag push triggers publish; no `branches:` push trigger present
-    assert "branches" not in triggers.get("push", {})
-    tag_pattern = triggers["push"]["tags"][0]
+    push = triggers.get("push", {})
+    # branch push triggers draft release creation on main
+    assert "main" in push.get("branches", [])
+    # tag push still supported for explicit stable releases
+    tag_pattern = push["tags"][0]
     assert tag_pattern.startswith("build-")

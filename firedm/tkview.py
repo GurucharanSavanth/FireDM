@@ -4078,6 +4078,38 @@ class MainWindow(IView):
                     cb.configure(state='disabled')
                 cb.pack(side='left', anchor='w')
 
+                # Per-step controls for post_processing
+                if pname == 'post_processing' and not blocked_reason:
+                    step_frame = tk.Frame(plugin_list_frame, bg=bg)
+                    step_frame.pack(anchor='w', fill='x', padx=25, pady=0)
+                    tk.Label(step_frame, text='Steps:', bg=bg, fg=fg).pack(side='left')
+                    from .plugins.post_processing import _STEP_NAMES
+                    for _step in _STEP_NAMES:
+                        def _make_step_toggle(s=_step):
+                            def _step_toggle():
+                                steps = getattr(config, 'post_processing_steps', {})
+                                steps[s] = not steps.get(s, False)
+                                config.post_processing_steps = steps
+                            return _step_toggle
+                        _sv = tk.BooleanVar(value=getattr(config, 'post_processing_steps', {}).get(_step, False))
+                        tk.Checkbutton(
+                            step_frame, text=_step, variable=_sv,
+                            command=_make_step_toggle(_step),
+                            bg=bg, fg=fg, selectcolor=bg, activebackground=bg,
+                        ).pack(side='left', padx=4)
+
+                # Queue category summary for queue_scheduler
+                if pname == 'queue_scheduler' and not blocked_reason:
+                    cats = getattr(config, 'queue_scheduler_categories', {})
+                    _cat_txt = '  '.join(
+                        f'{k}({v.get("max_concurrent", "?")} slots)'
+                        for k, v in cats.items()
+                    )
+                    _info_frame = tk.Frame(plugin_list_frame, bg=bg)
+                    _info_frame.pack(anchor='w', fill='x', padx=25, pady=0)
+                    tk.Label(_info_frame, text=f'Categories: {_cat_txt}',
+                             bg=bg, fg='#888888', font=('', 8)).pack(side='left')
+
         tk.Button(tab, text='Refresh plugins', bg=bg, fg=fg,
                   command=refresh_plugin_ui).pack(anchor='w', padx=5)
 
