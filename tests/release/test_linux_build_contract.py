@@ -55,9 +55,6 @@ def test_validate_linux_payload_required_files():
 
 
 def test_validate_linux_portable_executable_bit_check(tmp_path):
-    if sys.platform == "win32":
-        pytest.skip("Windows chmod does not preserve POSIX executable bits for this fixture")
-
     root = tmp_path / "FireDM"
     root.mkdir()
     for rel in validate_linux_portable.REQUIRED_FILES:
@@ -71,6 +68,8 @@ def test_validate_linux_portable_executable_bit_check(tmp_path):
     (root / "FireDM-GUI").chmod(0o755)
 
     payload = validate_linux_portable.validate_root(root, skip_smoke=True)
+    # On Linux: executable bit is required and must be set.
+    # On non-Linux: check is non-required (warning only), so required_missing is empty.
     assert payload["summary"]["required_missing"] == []
 
 
@@ -88,8 +87,14 @@ def test_validate_linux_portable_missing_executable_bit_fails(tmp_path):
     (root / "FireDM-GUI").chmod(0o644)
 
     payload = validate_linux_portable.validate_root(root, skip_smoke=True)
-    missing = payload["summary"]["required_missing"]
-    assert any("executable bit" in name for name in missing)
+    if sys.platform == "linux":
+        # On Linux the bit is required — must appear in required_missing.
+        missing = payload["summary"]["required_missing"]
+        assert any("executable bit" in name for name in missing)
+    else:
+        # On non-Linux the check is non-required (warning); required_missing stays empty.
+        warnings = payload["summary"]["warnings"]
+        assert any("executable bit" in name for name in warnings)
 
 
 def test_safe_extract_rejects_path_escape(tmp_path):

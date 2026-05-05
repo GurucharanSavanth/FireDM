@@ -89,16 +89,30 @@ def validate_root(root: Path, *, skip_smoke: bool = False) -> dict[str, Any]:
         path = root / executable
         if not path.is_file():
             continue
-        is_executable = bool(path.stat().st_mode & stat.S_IXUSR)
-        checks.append(
-            LinuxPortableCheck(
-                f"{executable} executable bit",
-                True,
-                "ok" if is_executable else "missing",
-                str(path),
-                "" if is_executable else "user execute bit missing",
+        if platform.system() != "Linux":
+            # POSIX executable bits are meaningless on Windows/macOS file systems;
+            # record as a non-required informational check so the validator is
+            # still runnable in CI on non-Linux hosts.
+            checks.append(
+                LinuxPortableCheck(
+                    f"{executable} executable bit",
+                    False,
+                    "warning",
+                    str(path),
+                    "executable bit check skipped (not Linux)",
+                )
             )
-        )
+        else:
+            is_executable = bool(path.stat().st_mode & stat.S_IXUSR)
+            checks.append(
+                LinuxPortableCheck(
+                    f"{executable} executable bit",
+                    True,
+                    "ok" if is_executable else "missing",
+                    str(path),
+                    "" if is_executable else "user execute bit missing",
+                )
+            )
 
     checks.append(detect_optional_tool(root, "ffmpeg"))
     checks.append(detect_optional_tool(root, "ffprobe"))
