@@ -86,6 +86,9 @@ def test_root_script_declares_canonical_parameters_and_safe_cleanup_terms():
     assert 'Native tools such as PyInstaller write normal progress to stderr' in text
     assert "tests\\test_frontend_common_adapters.py" in text
     assert "tests\\test_plugin_manifest.py" in text
+    assert "Invoke-PythonDistributionBuild" in text
+    assert '"--outdir", $script:ReleaseRoot' in text
+    assert "twine check" in text
     assert ".\\firedm\\plugins\\policy.py" in text
     assert "frontend_qt" not in text
     assert "PySide6" not in text
@@ -177,6 +180,7 @@ def test_dry_run_clean_writes_release_contract_without_deleting_sentinel():
     assert manifest["compatibility"]["scripts_windows_build_ps1"] == "thin wrapper"
     assert any(action["path"] == "build" for action in manifest["cleanup_actions"])
     assert any(artifact["path"] == "plugins-manifest.json" for artifact in manifest["release_artifacts"])
+    assert any(item["code"] == "python-package-dry-run" for item in manifest["blocked_items"])
     assert (RELEASE_DIR / "plugins-manifest.json").exists()
     assert (RELEASE_DIR / "plugins-manifest.txt").exists()
     assert manifest["gui_backend"] == "tkinter"

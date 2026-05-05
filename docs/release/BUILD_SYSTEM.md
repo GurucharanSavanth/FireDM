@@ -28,10 +28,11 @@ Status: changed 2026-05-03.
 
 Compatibility arguments from the older script are also accepted: `-PythonExe`,
 `-Channel`, `-Arch`, `-BuildId`, `-BuildDate`, `-AllowOverwrite`,
-`-SkipLint`, `-SkipPythonPackage`, `-SkipTwineCheck`, `-PayloadOnly`,
-`-ValidateOnly`, `-InstallLocalDeps`, `-SmokeGui`, `-Release`, `-ReleaseDir`,
-`-PublishDraftRelease`, `-GithubRepo`, and `-GithubTag`. Compatibility does not
-make deprecated behavior authoritative.
+`-SkipLint`, `-PayloadOnly`, `-ValidateOnly`, `-InstallLocalDeps`,
+`-SmokeGui`, `-Release`, `-ReleaseDir`, `-PublishDraftRelease`, `-GithubRepo`,
+and `-GithubTag`. `-SkipPythonPackage` skips the wheel/sdist stage, and
+`-SkipTwineCheck` keeps those artifacts but skips metadata validation.
+Compatibility does not make deprecated behavior authoritative.
 
 ## Build Stages
 
@@ -40,13 +41,14 @@ make deprecated behavior authoritative.
 3. Cleanup crew: remove only explicitly allowlisted generated paths when `-Clean` is used; preview with `-DryRun`.
 4. Dependency/runtime checks: validate Python, `pyproject.toml`, entry point, backend, and spec file.
 5. QA: compileall, targeted modern tests including frontend-common view-model and adapter tests, full pytest, mypy, and scoped Ruff unless skipped.
-6. Package build: Auto selects PyInstaller; Nuitka is blocked unless explicitly selected and installed.
-7. Release assembly: root `.\release` is the final artifact directory.
-8. Changelog compilation: writes `.\release\CHANGELOG-COMPILED.md`.
-9. Plugin artifact compilation: writes `.\release\plugins-manifest.json` and `.\release\plugins-manifest.txt`.
-10. Manifest generation: writes `.\release\manifest.json`.
-11. Checksums: writes `.\release\checksums.sha256`.
-12. Smoke: packaged CLI help/import smoke when artifacts exist and `-SkipSmoke` is not set.
+6. Python distribution build: writes `.\release\*.whl` and `.\release\*.tar.gz`, then runs `twine check` unless skipped.
+7. Package build: Auto selects PyInstaller; Nuitka is blocked unless explicitly selected and installed.
+8. Release assembly: root `.\release` is the final artifact directory.
+9. Changelog compilation: writes `.\release\CHANGELOG-COMPILED.md`.
+10. Plugin artifact compilation: writes `.\release\plugins-manifest.json` and `.\release\plugins-manifest.txt`.
+11. Manifest generation: writes `.\release\manifest.json`.
+12. Checksums: writes `.\release\checksums.sha256`.
+13. Smoke: packaged CLI help/import smoke when artifacts exist and `-SkipSmoke` is not set.
 
 ## Cleanup Policy
 
@@ -66,6 +68,8 @@ See `docs/release/RELEASE_ARTIFACT_LAYOUT.md`. The required root files are:
 - `release\CHANGELOG-COMPILED.md`
 - `release\plugins-manifest.json`
 - `release\plugins-manifest.txt`
+- `release\*.whl`
+- `release\*.tar.gz`
 
 ## Backend Status
 

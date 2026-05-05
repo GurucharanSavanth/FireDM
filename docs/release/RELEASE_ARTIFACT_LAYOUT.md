@@ -20,6 +20,8 @@ Every successful canonical script run writes or refreshes:
 | `release\CHANGELOG-COMPILED.md` | Compiled changelog and release notes from local sources. |
 | `release\plugins-manifest.json` | Machine-readable plugin discovery output; no plugin is enabled by the build script. |
 | `release\plugins-manifest.txt` | Human-readable plugin discovery summary for release review. |
+| `release\*.whl` | Python wheel built by the canonical script unless `-SkipPythonPackage` is selected. |
+| `release\*.tar.gz` | Python source distribution built by the canonical script unless `-SkipPythonPackage` is selected. |
 
 ## App Artifacts
 
@@ -40,6 +42,7 @@ Every successful canonical script run writes or refreshes:
 
 - changed: `scripts\windows-build.ps1` forwards to root `windows-build.ps1`.
 - planned: older callers that expect `dist\FireDM` may continue during transition because real OneFolder builds mirror the payload there for compatibility.
+- changed: Python wheel and source distribution artifacts are emitted directly under `release\`; `dist\` is not the final package authority.
 - blocked: `build-release.bat` is absent in the current dirty tree, so docs should prefer root `.\windows-build.ps1`.
 
 ## Verification Rule
