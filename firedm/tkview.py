@@ -4021,12 +4021,25 @@ class MainWindow(IView):
                 from .plugins.registry import PluginRegistry
                 PluginRegistry.scan_plugins()
                 plugins = PluginRegistry.get_plugin_list()
-            except Exception:
+            except Exception as _scan_err:
+                log(f'Plugin scan error: {_scan_err}')
                 plugins = []
 
             if not plugins:
-                tk.Label(plugin_list_frame, text='No plugins found.',
-                         bg=bg, fg=fg).pack(anchor='w', padx=5)
+                # Registry scan returned nothing (scan error or frozen build).
+                # Show policy-blocked entries so the UI is never empty.
+                try:
+                    from .plugins.policy import BLOCKED_PLUGIN_REASONS
+                    for _pname, _reason in sorted(BLOCKED_PLUGIN_REASONS.items()):
+                        _row = tk.Frame(plugin_list_frame, bg=bg)
+                        _row.pack(anchor='w', fill='x', padx=5, pady=1)
+                        _lbl = f'{_pname}  [BLOCKED: {_reason}]'
+                        tk.Label(_row, text=_lbl, bg=bg, fg='#aa6666',
+                                 anchor='w', wraplength=700, justify='left').pack(side='left', anchor='w')
+                except Exception as _pe:
+                    log(f'Plugin policy render error: {_pe}')
+                    tk.Label(plugin_list_frame, text='No plugins found.',
+                             bg=bg, fg=fg).pack(anchor='w', padx=5)
                 return
 
             for meta in plugins:
