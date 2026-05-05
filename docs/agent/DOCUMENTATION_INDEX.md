@@ -33,6 +33,7 @@
 | `docs/user/BUILT_IN_HELP.md` | Built-in help plan | human-facing | created |
 | `docs/user/TROUBLESHOOTING.md` | Troubleshooting plan | human-facing | created |
 | `docs/developer_guide.md` | Developer guidance | human-facing | preserved unchanged |
+| `docs/MCP_INTEGRATION.md` | MCP integration guide and usage patterns | developer/integration | preserved unchanged |
 | `docs/frontend/GUI_MIGRATION_PLAN.md` | Staged FireDM GUI modernization plan for the active Tk path | frontend/architecture | changed |
 | `docs/frontend/UI_PARITY_MATRIX.md` | Existing UI feature parity tracker | frontend/validation | created |
 | `docs/developer/CONTRIBUTING_MODERNIZATION.md` | Modernization contribution rules | developer | created |
@@ -50,6 +51,7 @@
 | Path | Purpose | Classification | Decision |
 | --- | --- | --- | --- |
 | `docs/architecture.md` | Short architecture overview | architecture | preserved, summarized into `ARCHITECTURE_MAP.md` |
+| `docs/frontend.md` | Tkinter frontend architecture map | frontend/architecture | preserved unchanged |
 | `docs/architecture/MODERN_ARCHITECTURE.md` | Modernization target architecture | architecture | created |
 | `docs/architecture/MODERNIZATION_MASTER_PLAN.md` | Authoritative status table + dependency graph for the 19-layer modernization program | architecture | created |
 | `docs/architecture/ENGINE_PLUGIN_SYSTEM.md` | Engine abstraction and adapter plan | architecture | created |
@@ -57,7 +59,9 @@
 | `docs/architecture/UI_UX_PLAN.md` | Incremental UI modernization plan | architecture/UI | created as design-only plan |
 | `docs/architecture/TOOLCHAIN_DECISIONS.md` | Official-doc-backed toolchain decisions | architecture/release | created |
 | `docs/video-pipeline-architecture.md` | Video pipeline map | architecture | preserved, summarized into `ARCHITECTURE_MAP.md` |
+| `docs/LEGACY_MODERNIZATION.md` | Legacy modernization roadmap and migration priority matrix | architecture/refactor | preserved unchanged |
 | `docs/legacy-refactor-plan.md` | Refactor boundaries for large modules | architecture/refactor | preserved, summarized into `REFACTOR_ROADMAP.md` |
+| `docs/QT_REMOVAL_LOG.md` | Qt removal record for the Tk-only frontend baseline | frontend/architecture | preserved unchanged |
 | `docs/extractor-migration-policy.md` | Extractor dependency policy | architecture/dependency | preserved unchanged |
 | `docs/dependency-strategy.md` | Dependency strategy | dependency | preserved unchanged |
 | `docs/dependency-modernization-review.md` | Dependency review notes | dependency | preserved unchanged |
