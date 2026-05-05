@@ -191,7 +191,7 @@ disable_update_feature: bool = False
 check_for_update: bool = not disable_update_feature
 update_frequency: int = 7  # Days
 last_update_check: tuple[int, int, int] | None = None  # Date format (year, month, day)
-updater_version: str = ''  # Application version that did last update check
+updater_version: str = '0.0.0'  # Application version that did last update check
 
 youtube_dl_version: str | None = None
 yt_dlp_version: str | None = None
