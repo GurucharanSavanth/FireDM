@@ -13,6 +13,7 @@
 
 import argparse
 import importlib
+import logging
 import os
 import re
 import signal
@@ -20,6 +21,8 @@ import subprocess
 import sys
 import time
 from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, Dict, Optional, Sequence as SequenceType
 
 # This code should stay on top to handle relative imports in case of direct call of FireDM.py
 if __package__ is None:
@@ -39,6 +42,8 @@ from .setting import load_setting
 from .utils import format_bytes, parse_bytes, parse_urls
 from .version import __version__
 
+logger = logging.getLogger(__name__)
+
 
 def open_config_editor(executable: str, config_fp: str) -> int:
     """Open the config file without routing editor text through a shell."""
@@ -50,10 +55,14 @@ def open_config_editor(executable: str, config_fp: str) -> int:
     return result.returncode
 
 
-def pars_args(arguments):
-    """parse arguments vector
+def pars_args(arguments: list[str]) -> Dict[str, Any]:
+    """Parse arguments vector.
+
     Args:
-        arguments(list): list contains arguments, could be sys.argv[1:] i.e. without script name
+        arguments: List contains arguments, could be sys.argv[1:] i.e. without script name
+
+    Returns:
+        Dictionary of parsed arguments
     """
 
     description = """FireDM is an open source Download Manager with multi-connections, high speed 
@@ -370,20 +379,22 @@ def import_diagnostics() -> None:
             imported_module = importlib.import_module(module)
             version = getversion(imported_module)
             total_time += time.time() - start
-            print(f'imported module: {module} {version}, in {round(time.time() - start, 1)} sec')
+            logger.info(f'imported module: {module} {version}, in {round(time.time() - start, 1)} sec')
         except Exception as e:
             status = 'optional import skipped' if optional else 'package import error'
-            print(module, f'{status}:', e)
+            logger.warning(f'{module} {status}: {e}')
 
-    print(f'Done, importing modules, total time: {round(total_time, 2)} sec ...')
+    logger.info(f'Done, importing modules, total time: {round(total_time, 2)} sec ...')
 
 
-def main(argv=sys.argv):
-    """
-    app main
+def main(argv: Optional[list[str]] = None) -> None:
+    """Application main entry point.
+
     Args:
-        argv(list): command line arguments vector, argv[0] is the script pathname if known
+        argv: Command line arguments vector (argv[0] is the script pathname if known)
     """
+    if argv is None:
+        argv = sys.argv
 
     if "--native-host" in argv:
         from .native_host import main as native_host_main
@@ -437,7 +448,7 @@ def main(argv=sys.argv):
         for key in config.settings_keys:
             value = getattr(config, key)
             print(f'{key}: {value}')
-        print('\nconfig file path:', config_fp)
+        print(f'\nconfig file path: {config_fp}')
         sys.exit(0)
 
     if sett.get('edit_config'):
@@ -461,11 +472,11 @@ def main(argv=sys.argv):
         import time
         time.sleep(1)  # give time to other threads to quit
 
-    def signal_handler(signum, frame):
-        print('\n\nuser interrupt operation, cleanup ...')
+    def signal_handler(signum: int, frame: Any) -> None:
+        logger.warning('\n\nuser interrupt operation, cleanup ...')
         signal.signal(signum, signal.SIG_IGN)  # ignore additional signals
         cleanup()
-        print('\n\ndone cleanup ...')
+        logger.info('\n\ndone cleanup ...')
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)

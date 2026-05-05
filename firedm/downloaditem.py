@@ -9,17 +9,22 @@
 
 # Download Item Class
 
+import logging
 import os
 import mimetypes
 import time
 from collections import deque
+from pathlib import Path
 from threading import Lock
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, unquote, urlparse
 
 from .utils import (validate_file_name, get_headers, translate_server_code, log, delete_file, delete_folder, save_json,
                     load_json, get_range_list)
 from . import config
 from .config import MediaType
+
+logger = logging.getLogger(__name__)
 
 
 class Segment:
@@ -86,14 +91,14 @@ class Segment:
         else:
             return 'undefined'
 
-    def get_size(self):
+    def get_size(self) -> int:
         http_headers = self.d.http_headers if self.d else None
         self.headers = get_headers(self.url, http_headers=http_headers)
         try:
             self.size = int(self.headers.get('content-length', 0))
-            print('Segment num:', self.num, 'getting size:', self.size)
-        except:
-            pass
+            logger.debug(f'Segment num: {self.num} getting size: {self.size}')
+        except (ValueError, AttributeError) as e:
+            logger.debug(f'Failed to get segment size: {e}')
         return self.size
 
     def __repr__(self):

@@ -11,12 +11,18 @@
         you should execute this module from command line using: "python cx_setup.py build" on windows only.
 """
 
+import logging
 import os
-import sys
 import shutil
 import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, List
 
-from cx_Freeze import setup, Executable
+from cx_Freeze import Executable, setup
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 APP_NAME = 'FireDM'
 
@@ -25,35 +31,35 @@ if len(sys.argv) == 1:
     sys.argv.append("build")
 
 # get current directory
-fp = os.path.realpath(os.path.abspath(__file__))
-current_folder = os.path.dirname(fp)
+fp = Path(__file__).resolve()
+current_folder = fp.parent
 
-print('cx_setup.py ......................................................................................')
+logger.info('cx_setup.py ....................................................................................')
 
-project_folder = os.path.dirname(os.path.dirname(current_folder))
+project_folder = current_folder.parent.parent
 build_folder = current_folder
-app_folder = os.path.join(build_folder, APP_NAME)
-icon_path = os.path.join(project_folder, 'icons', '48_32_16.ico') # best use size 48, and must be an "ico" format
-version_fp = os.path.join(project_folder, 'firedm', 'version.py')
-requirements_fp = os.path.join(project_folder, 'requirements.txt')
-main_script_path = os.path.join(project_folder, 'firedm.py')
+app_folder = build_folder / APP_NAME
+icon_path = project_folder / 'icons' / '48_32_16.ico'  # best use size 48, and must be an "ico" format
+version_fp = project_folder / 'firedm' / 'version.py'
+requirements_fp = project_folder / 'requirements.txt'
+main_script_path = project_folder / 'firedm.py'
 
-sys.path.insert(0,  project_folder)  # for imports to work
+sys.path.insert(0, str(project_folder))  # for imports to work
 from firedm.utils import simpledownload, delete_folder, create_folder
 
 # create build folder
-create_folder(build_folder)
+create_folder(str(build_folder))
 
 # get version
-version_module = {}
-with open(version_fp) as f:
+version_module: Dict[str, Any] = {}
+with open(version_fp, encoding='utf-8') as f:
     exec(f.read(), version_module)  # then we can use it as: version_module['__version__']
     version = version_module['__version__']
 
 
 # get required packages
-with open(requirements_fp) as f:
-    packages = [line.strip().split(' ')[0] for line in f.readlines() if line.strip()] + ['firedm']
+with open(requirements_fp, encoding='utf-8') as f:
+    packages: List[str] = [line.strip().split(' ')[0] for line in f.readlines() if line.strip()] + ['firedm']
 
 # clean names
 packages = [pkg.replace(';', '') for pkg in packages]
@@ -65,8 +71,8 @@ for pkg in ['distro', 'Pillow']:
 
 # add keyring to packages
 packages.append('keyring')
-   
-print(packages)
+
+logger.info(f'packages: {packages}')
 
 includes = []
 include_files = []
