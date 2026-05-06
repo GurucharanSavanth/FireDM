@@ -83,6 +83,7 @@ firedm/_build_info.py
 !build-release.bat
 !README.md
 !requirements.txt
+!requirements-advanced.txt
 !setup.py
 !pyproject.toml
 !todo.md

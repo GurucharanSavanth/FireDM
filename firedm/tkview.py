@@ -3509,6 +3509,9 @@ class MainWindow(IView):
         # settings tab
         self.sett_frame = self.create_settings_tab()
 
+        # advanced / user-sovereignty tab
+        self.advanced_frame = self.create_advanced_tab()
+
         # downloads tab
         self.downloads_frame = self.create_downloads_tab()
 
@@ -3522,6 +3525,7 @@ class MainWindow(IView):
         self.side_frame.create_button('Home', b64=home_icon, target=self.home_tab)
         self.side_frame.create_button('Downloads', b64=download_icon, target=self.downloads_frame)
         self.side_frame.create_button('Settings', b64=sett_icon, target=self.sett_frame)
+        self.side_frame.create_button('Advanced', b64=sett_icon, target=self.advanced_frame)
         self.side_frame.create_button('Log', b64=log_icon, target=self.log_tab)
 
         if not config.disable_update_feature:
@@ -4121,18 +4125,8 @@ class MainWindow(IView):
 
         separator()
 
-        # ------------------------------------------------------------------------------------Debugging options---------
-        # debugging shouldn't be available for normal users
-        # will reset these options in case it is previously stored in user config file
-        config.TEST_MODE = False
-        config.keep_temp = False
-        # heading('Debugging:')
-        # CheckOption(tab, 'keep temp files / folders after done downloading for debugging.',
-        #             key='keep_temp').pack(anchor='w')
-        # CheckOption(tab, 'Re-raise all caught exceptions / errors for debugging "Application will crash on any Error"',
-        #             key='TEST_MODE').pack(anchor='w')
-        #
-        # separator()
+        # Debugging options moved to Advanced tab (create_advanced_tab).
+        # keep_temp and test_mode are now user-persisted settings.
 
         # add padding
         for w in tab.pack_slaves():
@@ -4140,6 +4134,147 @@ class MainWindow(IView):
                 w.pack_configure(pady=5)
 
             # bind mousewheel scroll
+            atk.scroll_with_mousewheel(w, target=tab, apply_to_children=True)
+
+        return tab
+
+    def create_advanced_tab(self):
+        """Advanced / User Sovereignty settings panel.
+
+        All features here are OFF by default. The master toggle must be enabled
+        before any experimental sub-toggle has effect. DRM-related toggles are
+        permanently absent per USER_SOVEREIGNTY_POLICY.md §8.
+        """
+        bg = MAIN_BG
+        fg = MAIN_FG
+
+        tab = atk.ScrollableFrame(self.main_frame, bg=bg, sbar_fg=SBAR_FG, sbar_bg=SBAR_BG, hscroll=False)
+
+        def heading(text):
+            tk.Label(tab, text=' ' + text, bg=HDG_BG, fg=HDG_FG, anchor='w',
+                     font='any 10 bold').pack(anchor='w', expand=True, fill='x', ipady=3, pady=(0, 5))
+
+        def separator():
+            ttk.Separator(tab).pack(fill='both', expand=True, pady=(5, 30))
+
+        # ── Master gate ──────────────────────────────────────────────────────
+        heading('Advanced / Experimental Features')
+        tk.Label(
+            tab,
+            text=(
+                'WARNING: Enabling features below may violate terms of service, local laws,\n'
+                'or destabilize the application. Enable the master toggle first.'
+            ),
+            bg=bg, fg='#cc8800', anchor='w', justify='left',
+        ).pack(anchor='w', padx=5, pady=(0, 4))
+
+        def _on_master_toggle():
+            if not _master_var.get():
+                config.advanced_features_enabled = False
+                return
+            # Require explicit acknowledgment before activating
+            answer = self.popup(
+                'You are enabling advanced/experimental features.\n\n'
+                'These may violate third-party terms of service, local laws, '
+                'or destabilize the application.\n\n'
+                'The FireDM team is not responsible for misuse.\n\n'
+                'DRM Decryption remains permanently blocked regardless.\n\n'
+                'Continue?',
+                buttons=['Yes — I accept the risks', 'Cancel'],
+                title='Enable Advanced Features',
+            )
+            if answer != 'Yes — I accept the risks':
+                config.advanced_features_enabled = False
+                _master_var.set(False)
+
+        _master_var = tk.BooleanVar(value=config.advanced_features_enabled)
+        tk.Checkbutton(
+            tab, text='Enable Advanced / Experimental Features (master gate)',
+            variable=_master_var,
+            command=_on_master_toggle,
+            bg=bg, fg='#ffaa00', selectcolor=bg, activebackground=bg, anchor='w',
+            font='any 10 bold',
+        ).pack(anchor='w', padx=5, pady=4)
+
+        separator()
+
+        # ── Plugin policy overrides ───────────────────────────────────────────
+        heading('Plugin Policy Overrides')
+        tk.Label(
+            tab,
+            text=(
+                'These plugins are blocked by default pending release validation.\n'
+                'Enabling them requires the master gate above to be ON.\n'
+                'DRM Decryption is permanently blocked and cannot be enabled here.'
+            ),
+            bg=bg, fg='#888888', anchor='w', justify='left',
+        ).pack(anchor='w', padx=5, pady=(0, 4))
+
+        _plugin_overrides = [
+            ('enable_plugin_anti_detection',
+             'Anti-Detection / TLS Impersonation\n'
+             '  Rotates TLS fingerprint, HTTP headers, and proxy per download.\n'
+             '  Risk: may violate site terms of service.'),
+            ('enable_plugin_browser_integration',
+             'Browser Integration / Native Messaging Host\n'
+             '  Receives download requests from the FireDM browser extension.\n'
+             '  Risk: requires OS-level native messaging manifest installation.'),
+            ('enable_plugin_native_extractors',
+             'Native / Site-Specific Extractors\n'
+             '  Twitter/X, Reddit, Vimeo extractors with embedded API tokens.\n'
+             '  Risk: API tokens may expire or violate platform policies.'),
+            ('enable_plugin_protocol_expansion',
+             'Extended Protocol Support (FTP / SFTP / WebDAV / Magnet / IPFS)\n'
+             '  Enables partial protocol handlers beyond HTTP/S.\n'
+             '  Risk: handlers are incomplete; some protocols may fail silently.'),
+        ]
+
+        for _cfg_key, _label in _plugin_overrides:
+            _var = tk.BooleanVar(value=getattr(config, _cfg_key, False))
+
+            def _make_toggle(key=_cfg_key, var=_var):
+                def _toggle():
+                    if var.get() and not config.advanced_features_enabled:
+                        var.set(False)
+                        self.msgbox('Enable the master gate first.')
+                        return
+                    setattr(config, key, var.get())
+                return _toggle
+
+            tk.Checkbutton(
+                tab, text=_label, variable=_var, command=_make_toggle(),
+                bg=bg, fg=fg, selectcolor=bg, activebackground=bg,
+                anchor='w', justify='left', wraplength=680,
+            ).pack(anchor='w', padx=20, pady=2)
+
+        separator()
+
+        # ── Engine / bridge diagnostics ───────────────────────────────────────
+        heading('Download Engine Diagnostics')
+        CheckOption(tab, 'Enable engine bridge diagnostics (logs engine selection decisions)',
+                    key='engine_bridge_diagnostics_enabled').pack(anchor='w', padx=5)
+
+        separator()
+
+        # ── Debugging ──────────────────────────────────────────────────────────
+        heading('Debugging & Diagnostics')
+        tk.Label(
+            tab,
+            text='Debugging options. Not recommended for normal use.',
+            bg=bg, fg='#888888', anchor='w',
+        ).pack(anchor='w', padx=5, pady=(0, 4))
+
+        CheckOption(tab, 'Keep temp files / folders after download (for debugging)',
+                    key='keep_temp').pack(anchor='w', padx=5)
+        CheckOption(tab, 'Test mode — re-raise all caught exceptions (application will crash on any error)',
+                    key='test_mode').pack(anchor='w', padx=5)
+
+        separator()
+
+        # add padding + scroll binding
+        for w in tab.pack_slaves():
+            if not w.pack_info().get('pady'):
+                w.pack_configure(pady=5)
             atk.scroll_with_mousewheel(w, target=tab, apply_to_children=True)
 
         return tab

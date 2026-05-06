@@ -33,6 +33,12 @@ settings_keys: list[str] = [
     'plugin_states', 'plugin_dir', 'allow_user_plugins',
     'queue_scheduler_categories', 'queue_scheduler_time_rules',
     'post_processing_steps',
+    # Advanced / user-sovereignty keys
+    'advanced_features_enabled',
+    'enable_plugin_anti_detection', 'enable_plugin_browser_integration',
+    'enable_plugin_native_extractors', 'enable_plugin_protocol_expansion',
+    'engine_bridge_diagnostics_enabled', 'default_engine_id', 'disabled_engine_ids',
+    'test_mode',  # was previously reset to False every startup; now user-persisted
 ]
 
 # ----------------------------------------------------------------------------------------General ----------------------
@@ -139,6 +145,25 @@ allow_user_extractors: bool = False
 plugin_states: dict[str, bool] = {}  # {plugin_name: bool}, persisted in setting.cfg
 plugin_dir: str = ''  # Path to custom user plugin directory
 allow_user_plugins: bool = False  # SECURITY: loading user plugins = importlib exec
+
+# ── Advanced / User Sovereignty feature gates ────────────────────────────────
+# Master gate — must be True before any experimental toggle has effect.
+advanced_features_enabled: bool = False
+
+# Per-plugin user overrides for policy-blocked plugins.
+# drm_decryption is PERMANENTLY blocked and has no override key here.
+enable_plugin_anti_detection: bool = False
+enable_plugin_browser_integration: bool = False
+enable_plugin_native_extractors: bool = False
+enable_plugin_protocol_expansion: bool = False
+
+# Download engine / bridge diagnostics (used by download_engines/runtime_bridge)
+# True = controller logs engine-selection decisions; no runtime behavior changes.
+engine_bridge_diagnostics_enabled: bool = True
+
+# Engine selection
+default_engine_id: str = ''          # '' = registry default
+disabled_engine_ids: list[str] = []  # engine IDs the user has opted out of
 
 # Queue scheduler settings (read by queue_scheduler plugin when loaded)
 queue_scheduler_categories: dict[str, dict] = {

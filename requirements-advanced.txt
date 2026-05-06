@@ -1,0 +1,33 @@
+# Optional dependencies for Advanced / Experimental features in FireDM.
+# Install with: pip install -r requirements-advanced.txt
+#
+# None of these are required for normal FireDM operation.
+# Each group maps to a user-toggleable feature in Settings → Advanced.
+# See docs/USER_SOVEREIGNTY_POLICY.md for the feature-gate contract.
+
+# ── Anti-Detection / TLS Impersonation (enable_plugin_anti_detection) ────────
+# Provides curl_cffi for TLS fingerprint impersonation (curl-impersonate).
+curl_cffi>=0.5.0
+
+# ── Protocol Expansion (enable_plugin_protocol_expansion) ────────────────────
+# SFTP support
+paramiko>=3.0.0
+# WebDAV support
+webdavclient3>=3.14.7
+
+# ── Post-Processing Extensions (post_processing plugin — already unblocked) ──
+# Perceptual hashing for duplicate detection
+imagehash>=4.3.0
+Pillow>=9.0.0
+
+# ── Browser Integration (enable_plugin_browser_integration) ──────────────────
+# WebSocket transport as alternative to native messaging pipes
+websocket-client>=1.6.0
+
+# ── Native Extractors (enable_plugin_native_extractors) ──────────────────────
+# No extra pip deps; extractors embed public API tokens.
+# yt-dlp (already in requirements.txt) handles the heavy lifting.
+
+# ── Permanently blocked (DRM) — NO PACKAGES LISTED ──────────────────────────
+# drm_decryption is permanently blocked per USER_SOVEREIGNTY_POLICY.md §8.
+# Installing pycryptodome here would not enable it.
