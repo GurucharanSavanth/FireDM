@@ -1,11 +1,11 @@
 [CmdletBinding()]
 param(
     [ValidateSet("Debug", "Release")]
-    [string]$Mode,
+    [string]$Mode = "Release",
     [ValidateSet("OneFolder", "OneFile", "PortableZip")]
-    [string]$Kind,
+    [string]$Kind = "OneFolder",
     [ValidateSet("Auto", "PyInstaller", "Nuitka")]
-    [string]$Backend,
+    [string]$Backend = "Auto",
     [switch]$Clean,
     [switch]$NoClean,
     [switch]$DryRun,

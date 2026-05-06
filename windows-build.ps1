@@ -643,6 +643,10 @@ function Invoke-DependencyChecks {
 
 function Invoke-QA {
     Write-Log "Stage 4 QA"
+    if ($Mode -eq "Release" -and -not $SkipTests) {
+        Add-ValidationResult -Stage "qa" -Command "all QA checks" -ExitCode $null -Result "skipped" -Summary "Release mode; use -Mode Debug for full QA suite"
+        return
+    }
     if ($SkipTests) {
         Add-ValidationResult -Stage "qa" -Command "all QA checks" -ExitCode $null -Result "skipped" -Summary "SkipTests selected"
         return
@@ -1250,7 +1254,7 @@ try {
     $script:ResolvedBuildId = Get-DefaultBuildId
 
     Write-Log "python=$script:PythonPath"
-    Write-Log "version=$script:ResolvedVersion build_id=$script:ResolvedBuildId"
+    Write-Log "version=$script:ResolvedVersion build_id=$script:ResolvedBuildId mode=$Mode"
     if ($Release) {
         Add-BuildWarning "legacy-release-switch" "-Release is accepted for compatibility; use -Mode Release on the canonical script."
     }
