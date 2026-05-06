@@ -4171,6 +4171,7 @@ class MainWindow(IView):
         def _on_master_toggle():
             if not _master_var.get():
                 config.advanced_features_enabled = False
+                refresh_plugin_ui()
                 return
             # Require explicit acknowledgment before activating
             answer = self.popup(
@@ -4186,6 +4187,9 @@ class MainWindow(IView):
             if answer != 'Yes — I accept the risks':
                 config.advanced_features_enabled = False
                 _master_var.set(False)
+                return
+            config.advanced_features_enabled = True
+            refresh_plugin_ui()
 
         _master_var = tk.BooleanVar(value=config.advanced_features_enabled)
         tk.Checkbutton(
@@ -4239,6 +4243,7 @@ class MainWindow(IView):
                         self.msgbox('Enable the master gate first.')
                         return
                     setattr(config, key, var.get())
+                    refresh_plugin_ui()
                 return _toggle
 
             tk.Checkbutton(
