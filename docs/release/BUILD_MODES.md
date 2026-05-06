@@ -58,7 +58,7 @@ The Windows build script (`windows-build.ps1`) supports two distinct modes to se
 
 ## Build Artifacts
 
-Both modes produce identical artifact sets:
+Both modes produce these core artifacts:
 
 - `FireDM/` (one-folder executable bundle)
 - `FireDM.zip` (portable archive, if `-Kind PortableZip`)
@@ -68,6 +68,25 @@ Both modes produce identical artifact sets:
 - `manifest.json` (release metadata)
 - `checksums.sha256` (file integrity hashes)
 - Python distribution artifacts (`.whl`, `.tar.gz`)
+
+### Release Build (Default)
+
+Release artifacts exclude:
+- `tests/` directory (excluded via PyInstaller spec)
+- `pytest`, `_pytest` modules (excluded via PyInstaller spec)
+- `docs/agent/` development notes (not included in changelog)
+- Session handoff files (development-only context)
+
+**Result**: Minimal, clean release bundle suitable for end users. No test infrastructure, no debug notes.
+
+### Debug Build
+
+Debug artifacts may include:
+- Session handoff documentation in CHANGELOG-COMPILED.md (if present)
+- Full git log history (all commits, not just tags)
+- Build diagnostic information
+
+**Result**: Full transparency build with development context for validation and troubleshooting.
 
 ## Build Metadata
 

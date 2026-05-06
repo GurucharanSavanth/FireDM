@@ -1051,7 +1051,10 @@ function Write-CompiledChangelog {
     foreach ($path in Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot "docs\release") -Filter "*.md" -File -ErrorAction SilentlyContinue | Sort-Object FullName) {
         Add-ChangelogSource -Sections $sections -Path (Get-RelativePath -BasePath $script:RepoRoot -Path $path.FullName)
     }
-    Add-ChangelogSource -Sections $sections -Path "docs\agent\SESSION_HANDOFF.md" -Label "agent session handoff"
+    # Debug handoff only in Debug mode
+    if ($Mode -eq "Debug") {
+        Add-ChangelogSource -Sections $sections -Path "docs\agent\SESSION_HANDOFF.md" -Label "agent session handoff"
+    }
 
     if ($script:GitState.git_present) {
         $sections.Add("## Source: git log") | Out-Null
