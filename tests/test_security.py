@@ -155,6 +155,23 @@ def test_load_setting_keeps_legitimate_keys(tmp_path, monkeypatch):
     config.max_concurrent_downloads = original_concurrent
 
 
+def test_load_setting_quarantines_malformed_json(tmp_path, monkeypatch):
+    """Malformed setting.cfg must be preserved before defaults replace it."""
+    from firedm import config, setting
+
+    monkeypatch.setattr(config, "sett_folder", str(tmp_path))
+    bad_config = tmp_path / "setting.cfg"
+    bad_config.write_text('{"valid": true,\n"broken":', encoding="utf-8")
+
+    loaded = setting.get_user_settings()
+
+    assert loaded == {}
+    assert not bad_config.exists()
+    backups = list(tmp_path.glob("setting.cfg.invalid-*"))
+    assert len(backups) == 1
+    assert backups[0].read_text(encoding="utf-8") == '{"valid": true,\n"broken":'
+
+
 # ---------------------------------------------------------------------------
 # F-HIGH-4: load_d_map() must not restore on_completion_command from disk
 # ---------------------------------------------------------------------------

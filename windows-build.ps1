@@ -135,6 +135,16 @@ function Add-BuildWarning {
     Write-Log $Message "WARN"
 }
 
+function Write-Utf8NoBomFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Value, $encoding)
+}
+
 function Add-BlockedItem {
     param(
         [Parameter(Mandatory = $true)][string]$Code,
@@ -369,6 +379,7 @@ function Get-CleanupPlan {
     Add-CleanupCandidate $plan "release\temp" "safe" "legacy canonical release temporary folder" "remove-if-clean"
     Add-CleanupCandidate $plan "release\FireDM" "safe" "canonical one-folder app output" "remove-if-clean"
     Add-CleanupCandidate $plan "release\FireDM.zip" "safe" "canonical portable zip output" "remove-if-clean"
+    Add-CleanupCandidate $plan "release\FireDM_Windows.zip" "safe" "legacy portable zip output replaced by release\FireDM.zip" "remove-if-clean"
 
     if (Test-Path -LiteralPath $script:ReleaseRoot -PathType Container) {
         Get-ChildItem -LiteralPath $script:ReleaseRoot -File -Force -ErrorAction SilentlyContinue |
@@ -764,6 +775,72 @@ function Invoke-PythonDistributionBuild {
     }
 }
 
+function Write-PortablePayloadMetadata {
+    param([Parameter(Mandatory = $true)][string]$PayloadRoot)
+
+    $payloadFiles = New-Object System.Collections.Generic.List[object]
+    foreach ($path in Get-ChildItem -LiteralPath $PayloadRoot -File -Recurse -Force | Sort-Object FullName) {
+        $relative = (Get-RelativePath -BasePath $PayloadRoot -Path $path.FullName).Replace("\", "/")
+        if ($relative -in @("README_PORTABLE.txt", "build-metadata.json", "payload-manifest.json")) {
+            continue
+        }
+        $payloadFiles.Add([pscustomobject]@{
+            path = $relative
+            size = $path.Length
+            sha256 = (Get-FileHash -LiteralPath $path.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        }) | Out-Null
+    }
+
+    $metadata = [ordered]@{
+        schema = 1
+        appName = "FireDM"
+        version = $script:ResolvedVersion
+        buildId = $script:ResolvedBuildId
+        channel = $Channel
+        arch = $Arch
+        platform = "windows"
+        backend = $script:BuildBackend
+        kind = "portable"
+        payloadRoot = $PayloadRoot
+        gitCommit = $script:GitState.git_commit
+        dirtyTree = $script:GitState.dirty_tree
+        builtAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+        fileCount = $payloadFiles.Count
+    }
+
+    $manifest = [ordered]@{
+        schema = 1
+        kind = "payload"
+        appName = "FireDM"
+        version = $script:ResolvedVersion
+        buildId = $script:ResolvedBuildId
+        channel = $Channel
+        arch = $Arch
+        platform = "windows"
+        fileCount = $payloadFiles.Count
+        files = @($payloadFiles.ToArray())
+        blockedBundledTools = [ordered]@{
+            ffmpeg = "not bundled until redistribution license/source/checksum policy is finalized"
+            ffprobe = "not bundled until redistribution license/source/checksum policy is finalized"
+            deno = "not bundled; current project policy keeps Deno external"
+        }
+    }
+
+    $readmeLines = @(
+        "FireDM $($script:ResolvedVersion) portable package ($Arch)",
+        "",
+        "Run FireDM-GUI.exe for the GUI or firedm.exe --help for CLI options.",
+        "This portable package does not install shortcuts, registry entries, or PATH changes.",
+        "Configuration may still follow FireDM runtime settings unless portable-mode support is explicitly added in the app.",
+        "FFmpeg, ffprobe, and Deno are external unless bundled in this package and listed in payload-manifest.json.",
+        ""
+    )
+
+    Write-Utf8NoBomFile -Path (Join-Path $PayloadRoot "README_PORTABLE.txt") -Value ($readmeLines -join "`n")
+    Write-Utf8NoBomFile -Path (Join-Path $PayloadRoot "build-metadata.json") -Value ($metadata | ConvertTo-Json -Depth 8)
+    Write-Utf8NoBomFile -Path (Join-Path $PayloadRoot "payload-manifest.json") -Value ($manifest | ConvertTo-Json -Depth 8)
+}
+
 function Invoke-PackageBuild {
     Write-Log "Stage 5 package build"
     if ($ValidateOnly) {
@@ -833,6 +910,7 @@ function Invoke-PackageBuild {
     }
 
     if ($Kind -eq "PortableZip") {
+        Write-PortablePayloadMetadata -PayloadRoot $releaseApp
         $zip = Join-Path $script:ReleaseRoot "FireDM.zip"
         if (Test-Path -LiteralPath $zip) {
             Remove-Item -LiteralPath $zip -Force

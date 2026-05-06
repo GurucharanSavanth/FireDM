@@ -9,6 +9,7 @@
 
 import json
 import os
+from datetime import datetime, timezone
 
 from . import config, model
 from .app_paths import choose_settings_dir, resolve_global_settings_dir
@@ -41,6 +42,17 @@ def locate_setting_folder():
 
 
 config.sett_folder = locate_setting_folder()
+
+
+def _quarantine_invalid_json_file(file):
+    """Preserve malformed JSON before the app writes replacement defaults."""
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    backup_file = f'{file}.invalid-{timestamp}'
+    try:
+        os.replace(file, backup_file)
+        log('Invalid JSON config preserved at:', backup_file)
+    except OSError as e:
+        log('Could not preserve invalid JSON config:', e)
 
 
 def load_d_map():
@@ -146,14 +158,17 @@ def save_d_map(d_map):
 
 def get_user_settings():
     settings = {}
+    file = os.path.join(config.sett_folder, 'setting.cfg')
     try:
         # log('Load user setting from', config.sett_folder)
-        file = os.path.join(config.sett_folder, 'setting.cfg')
         with open(file) as f:
             settings = json.load(f)
 
     except FileNotFoundError:
         log('setting.cfg not found')
+    except json.JSONDecodeError as e:
+        log('load_setting()> invalid setting.cfg JSON:', e)
+        _quarantine_invalid_json_file(file)
     except Exception as e:
         log('load_setting()> ', e)
 

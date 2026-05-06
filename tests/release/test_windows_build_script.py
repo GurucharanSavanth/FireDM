@@ -93,6 +93,12 @@ def test_root_script_declares_canonical_parameters_and_safe_cleanup_terms():
     assert "frontend_qt" not in text
     assert "PySide6" not in text
     assert "Get-PluginManifestSection" in text
+    assert "Write-PortablePayloadMetadata" in text
+    assert "Write-Utf8NoBomFile" in text
+    assert "release\\FireDM_Windows.zip" in text
+    assert "README_PORTABLE.txt" in text
+    assert "build-metadata.json" in text
+    assert "payload-manifest.json" in text
     assert "git clean" not in text
     assert "Invoke-Expression" not in text
 

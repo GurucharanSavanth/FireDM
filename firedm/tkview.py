@@ -3202,6 +3202,7 @@ class MainWindow(IView):
         self.root.minsize(750, 455)
         self.root.title(f'FireDM ver.{config.APP_VERSION}')
         self.main_frame = None
+        self.refresh_plugin_ui = lambda: None
 
         # set window icon
         global app_icon_img, popup_icon_img
@@ -4114,6 +4115,8 @@ class MainWindow(IView):
                     tk.Label(_info_frame, text=f'Categories: {_cat_txt}',
                              bg=bg, fg='#888888', font=('', 8)).pack(side='left')
 
+        self.refresh_plugin_ui = refresh_plugin_ui
+
         tk.Button(tab, text='Refresh plugins', bg=bg, fg=fg,
                   command=refresh_plugin_ui).pack(anchor='w', padx=5)
 
@@ -4171,7 +4174,7 @@ class MainWindow(IView):
         def _on_master_toggle():
             if not _master_var.get():
                 config.advanced_features_enabled = False
-                refresh_plugin_ui()
+                self.refresh_plugin_ui()
                 return
             # Require explicit acknowledgment before activating
             answer = self.popup(
@@ -4189,7 +4192,7 @@ class MainWindow(IView):
                 _master_var.set(False)
                 return
             config.advanced_features_enabled = True
-            refresh_plugin_ui()
+            self.refresh_plugin_ui()
 
         _master_var = tk.BooleanVar(value=config.advanced_features_enabled)
         tk.Checkbutton(
@@ -4243,7 +4246,7 @@ class MainWindow(IView):
                         self.msgbox('Enable the master gate first.')
                         return
                     setattr(config, key, var.get())
-                    refresh_plugin_ui()
+                    self.refresh_plugin_ui()
                 return _toggle
 
             tk.Checkbutton(
