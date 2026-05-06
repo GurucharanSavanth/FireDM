@@ -14,7 +14,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from .policy import blocked_plugin_reason
+from .policy import blocked_plugin_reason, is_permanently_blocked
 from .registry import PluginMeta, PluginRegistry
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,9 @@ class PluginManifestEntry:
     enabled: bool = False
     loaded: bool = False
     blocked_reason: str = ""
+    # True  → user can enable via Advanced panel (USER_OVERRIDABLE_BLOCKED tier)
+    # False → permanently blocked; no user toggle exists (PERMANENTLY_BLOCKED tier)
+    user_overridable: bool = False
 
     def __post_init__(self) -> None:
         if not self.plugin_id:
@@ -104,6 +107,7 @@ def _entry_to_dict(entry: PluginManifestEntry) -> dict[str, Any]:
         "enabled": entry.enabled,
         "loaded": entry.loaded,
         "blocked_reason": entry.blocked_reason,
+        "user_overridable": entry.user_overridable,
     }
 
 
@@ -111,9 +115,9 @@ def entry_from_meta(
     meta: PluginMeta,
     *,
     status: str = PLUGIN_STATUS_DISABLED,
-    blocked_reason: str = ""
+    blocked_reason: str = "",
+    user_overridable: bool = False,
 ) -> PluginManifestEntry:
-    """Build a manifest entry from a PluginMeta record."""
     """Build a manifest entry from a PluginMeta record."""
     return PluginManifestEntry(
         plugin_id=meta.name,
@@ -128,6 +132,7 @@ def entry_from_meta(
         enabled=bool(meta.enabled),
         loaded=bool(meta.loaded),
         blocked_reason=blocked_reason,
+        user_overridable=user_overridable,
     )
 
 
@@ -163,7 +168,15 @@ def discover_plugin_manifest(
     for meta in metas:
         reason = blocked_map.get(meta.name) or blocked_plugin_reason(meta.name)
         if reason:
-            blocked.append(entry_from_meta(meta, status=PLUGIN_STATUS_BLOCKED, blocked_reason=reason))
+            # user_overridable=True only for USER_OVERRIDABLE_BLOCKED tier;
+            # PERMANENTLY_BLOCKED plugins (e.g. drm_decryption) are never overridable.
+            overridable = not is_permanently_blocked(meta.name)
+            blocked.append(entry_from_meta(
+                meta,
+                status=PLUGIN_STATUS_BLOCKED,
+                blocked_reason=reason,
+                user_overridable=overridable,
+            ))
             continue
 
         status = PLUGIN_STATUS_AVAILABLE if meta.loaded else PLUGIN_STATUS_DISABLED

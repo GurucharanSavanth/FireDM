@@ -683,7 +683,8 @@ function Invoke-QA {
                 ".\tests\test_frontend_common_view_models.py",
                 ".\tests\test_frontend_common_adapters.py",
                 ".\tests\test_plugin_manifest.py",
-                ".\tests\test_plugins.py"
+                ".\tests\test_plugins.py",
+                ".\tests\test_user_sovereignty.py"
             )
         } else {
             Add-BuildWarning "ruff-unavailable" "ruff is unavailable in the selected Python environment; scoped lint skipped."
@@ -927,9 +928,11 @@ function Add-PluginSummaryLines {
         $version = Get-ObjectPropertyValue -Object $entry -Name "version"
         $status = Get-ObjectPropertyValue -Object $entry -Name "status"
         $reason = Get-ObjectPropertyValue -Object $entry -Name "blocked_reason"
+        $overridable = Get-ObjectPropertyValue -Object $entry -Name "user_overridable"
         $line = "$Label $pluginId v$version [$status]"
         if ($reason) {
-            $line = "$line reason=$reason"
+            $overridableTag = if ($overridable) { "user-overridable" } else { "permanent" }
+            $line = "$line block=$overridableTag reason=$reason"
         }
         $LineList.Add($line) | Out-Null
     }
@@ -971,7 +974,16 @@ function Write-PluginManifestArtifacts {
     Set-Content -LiteralPath $textPath -Value ($pluginLines -join "`n") -Encoding UTF8
     $script:ReleaseArtifacts.Add([pscustomobject]@{ kind = "pluginManifestJson"; path = "plugins-manifest.json" }) | Out-Null
     $script:ReleaseArtifacts.Add([pscustomobject]@{ kind = "pluginManifestText"; path = "plugins-manifest.txt" }) | Out-Null
-    Add-ValidationResult -Stage "plugin-artifacts" -Command "write plugin manifest artifacts" -ExitCode 0 -Result "passed" -Summary "plugins-manifest.json; plugins-manifest.txt"
+
+    # Copy optional dependency list for advanced features (user-sovereignty)
+    $advReqSrc = Join-Path $PSScriptRoot "requirements-advanced.txt"
+    if (Test-Path -LiteralPath $advReqSrc -PathType Leaf) {
+        $advReqDest = Join-Path $script:ReleaseRoot "requirements-advanced.txt"
+        Copy-Item -LiteralPath $advReqSrc -Destination $advReqDest -Force
+        $script:ReleaseArtifacts.Add([pscustomobject]@{ kind = "advancedRequirements"; path = "requirements-advanced.txt" }) | Out-Null
+    }
+
+    Add-ValidationResult -Stage "plugin-artifacts" -Command "write plugin manifest artifacts" -ExitCode 0 -Result "passed" -Summary "plugins-manifest.json; plugins-manifest.txt; requirements-advanced.txt"
 }
 
 function Invoke-SmokeCheck {
